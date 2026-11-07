@@ -46,6 +46,7 @@ import com.biglybt.core.content.RelatedAttributeLookupListener;
 import com.biglybt.core.content.RelatedContentManager;
 import com.biglybt.core.download.DownloadManager;
 import com.biglybt.core.download.DownloadManagerAvailability;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.download.DownloadManagerFactory;
 import com.biglybt.core.internat.LocaleTorrentUtil;
 import com.biglybt.core.internat.LocaleUtilDecoder;
@@ -6585,6 +6586,65 @@ public class OpenTorrentOptionsWindow
 					};
 					
 					itemPriority.setEnabled( !allPriorityAuto );
+
+					boolean dlc_single = infos.length == 1;
+					int dlc_index = dlc_single ? infos[0].getIndex() : -1;
+					int dlc_file_mode = dlc_single ? torrentOptions.getDlcbtFileMode(dlc_index) : 0;
+					boolean dlc_off = torrentOptions.isDlcbtExplicitOff();
+					if ( !dlc_off && dlc_single && dlc_file_mode == 0 && torrentOptions.isDlcbtAutoQueue()){
+						dlc_file_mode = DownloadControlBT.MODE_RANDOM;
+					}
+
+					final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
+					Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
+					itemDownloadControlBT.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.tooltip"));
+					Menu menuDLC = new Menu(shell, SWT.DROP_DOWN);
+					itemDownloadControlBT.setMenu(menuDLC);
+
+					final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
+					itemDLCOff.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.off.tooltip"));
+					itemDLCOff.setSelection(dlc_off);
+					itemDLCOff.addListener(SWT.Selection, event -> {
+						if (itemDLCOff.getSelection()) {
+							torrentOptions.setDlcbtExplicitOff(true);
+						}
+					});
+
+					final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
+					itemDLCSequential.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.sequential.tooltip"));
+					itemDLCSequential.setSelection(!dlc_off && dlc_file_mode == DownloadControlBT.MODE_SEQUENTIAL);
+					itemDLCSequential.setEnabled(dlc_single);
+					itemDLCSequential.addListener(SWT.Selection, event -> {
+						if (itemDLCSequential.getSelection() && dlc_single) {
+							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_SEQUENTIAL);
+						}
+					});
+
+					final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
+					itemDLCRandom.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.random.tooltip"));
+					itemDLCRandom.setSelection(!dlc_off && dlc_file_mode == DownloadControlBT.MODE_RANDOM);
+					itemDLCRandom.setEnabled(dlc_single);
+					itemDLCRandom.addListener(SWT.Selection, event -> {
+						if (itemDLCRandom.getSelection() && dlc_single) {
+							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_RANDOM);
+						}
+					});
+
+					final MenuItem itemDLCAuto = new MenuItem(menuDLC, SWT.CHECK);
+					Messages.setLanguageText(itemDLCAuto, "menu.downloadcontrolbt.autoqueue");
+					itemDLCAuto.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.autoqueue.tooltip"));
+					itemDLCAuto.setSelection(torrentOptions.isDlcbtAutoQueue() && !dlc_off);
+					itemDLCAuto.addListener(SWT.Selection, event -> {
+						torrentOptions.setDlcbtAutoQueue(itemDLCAuto.getSelection());
+					});
 
 					itemNumeric.addListener(SWT.Selection, priorityListener);
 					itemNumericAuto.addListener(SWT.Selection, priorityListener);

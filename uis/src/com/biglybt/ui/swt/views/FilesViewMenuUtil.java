@@ -368,10 +368,74 @@ public class FilesViewMenuUtil
 		itemDelete.setData("Priority", PRIORITY_DELETE);
 		Messages.setLanguageText(itemDelete, "wizard.multitracker.delete"); // lazy but we're near release
 
-		if ( all_files.size() > 1 ){
-			final MenuItem itemDLCMultiple = new MenuItem(menu, SWT.PUSH);
-			Messages.setLanguageText(itemDLCMultiple, "menu.downloadcontrolbt.multiple");
-			itemDLCMultiple.setEnabled( false );
+		if ( all_files.size() >= 1 ){
+			DiskManagerFileInfo first = all_files.get(0);
+			DownloadManager dlc_dm = first.getDownloadManager();
+			boolean dlc_single = all_files.size() == 1;
+			DiskManagerFileInfo dlc_file = dlc_single ? first : null;
+			boolean dlc_usable = dlc_file != null && dlc_file.getLength() > 0 && !dlc_file.isSkipped();
+			int dlc_policy = DownloadControlBT.getPolicy( dlc_dm );
+			boolean dlc_off = dlc_policy == DownloadControlBT.POLICY_OFF || !DownloadControlBT.isEnabled( dlc_dm );
+			int dlc_file_mode = DownloadControlBT.MODE_OFF;
+			if ( dlc_file != null && !dlc_off ){
+				if ( dlc_policy == DownloadControlBT.POLICY_AUTO ){
+					dlc_file_mode = DownloadControlBT.getEffectiveFileMode( dlc_dm, dlc_file.getIndex());
+				}else if ( DownloadControlBT.isEnabledForFile( dlc_dm, dlc_file.getIndex())){
+					dlc_file_mode = DownloadControlBT.getMode( dlc_dm );
+				}
+			}
+
+			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
+			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
+			itemDownloadControlBT.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.tooltip" ));
+
+			Menu menuDLC = new Menu(menu.getShell(), SWT.DROP_DOWN);
+			itemDownloadControlBT.setMenu(menuDLC);
+
+			final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
+			itemDLCOff.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.off.tooltip" ));
+			itemDLCOff.setSelection( dlc_off );
+			itemDLCOff.addListener( SWT.Selection, event -> {
+				if ( itemDLCOff.getSelection()){
+					DownloadControlBT.disable( dlc_dm );
+				}
+			});
+
+			final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
+			itemDLCSequential.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.sequential.tooltip" ));
+			itemDLCSequential.setSelection( dlc_file_mode == DownloadControlBT.MODE_SEQUENTIAL );
+			itemDLCSequential.setEnabled( dlc_usable );
+			itemDLCSequential.addListener( SWT.Selection, event -> {
+				if ( itemDLCSequential.getSelection() && dlc_file != null ){
+					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
+				}
+			});
+
+			final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
+			itemDLCRandom.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.random.tooltip" ));
+			itemDLCRandom.setSelection( dlc_file_mode == DownloadControlBT.MODE_RANDOM );
+			itemDLCRandom.setEnabled( dlc_usable );
+			itemDLCRandom.addListener( SWT.Selection, event -> {
+				if ( itemDLCRandom.getSelection() && dlc_file != null ){
+					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_RANDOM );
+				}
+			});
+
+			final MenuItem itemDLCAuto = new MenuItem(menuDLC, SWT.CHECK);
+			Messages.setLanguageText(itemDLCAuto, "menu.downloadcontrolbt.autoqueue");
+			itemDLCAuto.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.autoqueue.tooltip" ));
+			itemDLCAuto.setSelection( dlc_policy == DownloadControlBT.POLICY_AUTO );
+			itemDLCAuto.addListener( SWT.Selection, event -> {
+				DownloadControlBT.setAutoQueueEnabled( dlc_dm, itemDLCAuto.getSelection());
+			});
 		}
 
 		if ( all_files.size() == 1 ){
@@ -411,55 +475,6 @@ public class FilesViewMenuUtil
 					});
 			}
 
-			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
-			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
-			itemDownloadControlBT.setToolTipText(
-				MessageText.getString( "menu.downloadcontrolbt.tooltip" ));
-
-			Menu menuDLC = new Menu(menu.getShell(), SWT.DROP_DOWN);
-			itemDownloadControlBT.setMenu(menuDLC);
-
-			DownloadManager dlc_dm = file.getDownloadManager();
-			boolean dlc_this_file = DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex());
-			int dlc_mode = dlc_this_file ? DownloadControlBT.getMode( dlc_dm ) : DownloadControlBT.MODE_OFF;
-			boolean dlc_usable = file.getLength() > 0 && !file.isSkipped();
-
-			final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
-			Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
-			itemDLCOff.setSelection( dlc_mode == DownloadControlBT.MODE_OFF );
-			itemDLCOff.setEnabled( dlc_usable || dlc_this_file );
-			itemDLCOff.addListener( SWT.Selection, event -> {
-				if ( itemDLCOff.getSelection()){
-					if ( DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex())){
-						DownloadControlBT.disable( dlc_dm );
-					}
-				}
-			});
-
-			final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
-			Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
-			itemDLCSequential.setToolTipText(
-				MessageText.getString( "menu.downloadcontrolbt.sequential.tooltip" ));
-			itemDLCSequential.setSelection( dlc_mode == DownloadControlBT.MODE_SEQUENTIAL );
-			itemDLCSequential.setEnabled( dlc_usable );
-			itemDLCSequential.addListener( SWT.Selection, event -> {
-				if ( itemDLCSequential.getSelection()){
-					DownloadControlBT.enableForFile( dlc_dm, file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
-				}
-			});
-
-			final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
-			Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
-			itemDLCRandom.setToolTipText(
-				MessageText.getString( "menu.downloadcontrolbt.random.tooltip" ));
-			itemDLCRandom.setSelection( dlc_mode == DownloadControlBT.MODE_RANDOM );
-			itemDLCRandom.setEnabled( dlc_usable );
-			itemDLCRandom.addListener( SWT.Selection, event -> {
-				if ( itemDLCRandom.getSelection()){
-					DownloadControlBT.enableForFile( dlc_dm, file.getIndex(), DownloadControlBT.MODE_RANDOM );
-				}
-			});
-			
 			final MenuItem setThumb = new MenuItem(menu, SWT.PUSH);
 			Messages.setLanguageText(setThumb, "menu.set.file.as.thumb");
 						

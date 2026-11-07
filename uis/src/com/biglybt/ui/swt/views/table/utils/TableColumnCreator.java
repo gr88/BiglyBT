@@ -21,8 +21,13 @@ import java.lang.reflect.Constructor;
 import java.util.Iterator;
 import java.util.Map;
 
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
 import com.biglybt.core.util.Debug;
 import com.biglybt.core.util.LightHashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import com.biglybt.pif.download.Download;
 import com.biglybt.pif.download.DownloadTypeComplete;
 import com.biglybt.pif.download.DownloadTypeIncomplete;
@@ -47,7 +52,7 @@ public class TableColumnCreator
 	public static int DATE_COLUMN_WIDTH = 110;
 
 	public static TableColumnCore[] createIncompleteDM(String tableID) {
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			HealthItem.COLUMN_ID,
 			RankItem.COLUMN_ID,
 			NameItem.COLUMN_ID,
@@ -69,6 +74,9 @@ public class TableColumnCreator
 			ShareRatioItem.COLUMN_ID,
 			TrackerStatusItem.COLUMN_ID,
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map mapTCs = tcManager.getTableColumnsAsMap(DownloadTypeIncomplete.class, tableID);
@@ -84,13 +92,15 @@ public class TableColumnCreator
 				tcManager.setDefaultSortColumnName(tableID, RankItem.COLUMN_ID);
 				tc.setSortAscending(true);
 			}
+		} else if (DownloadControlBT.isProfileEnabled()) {
+			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
 
 	public static TableColumnCore[] createCompleteDM(String tableID) {
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			HealthItem.COLUMN_ID,
 			RankItem.COLUMN_ID,
 			"SeedingRank",
@@ -110,6 +120,9 @@ public class TableColumnCreator
 			UpItem.COLUMN_ID,
 			TrackerStatusItem.COLUMN_ID,
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map mapTCs = tcManager.getTableColumnsAsMap(DownloadTypeComplete.class, tableID);
@@ -126,13 +139,15 @@ public class TableColumnCreator
 				tcManager.setDefaultSortColumnName(tableID, RankItem.COLUMN_ID);
 				tc.setSortAscending(true);
 			}
+		} else if (DownloadControlBT.isProfileEnabled()) {
+			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
 
 	public static TableColumnCore[] createAllDM(String tableID) {
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 				HealthItem.COLUMN_ID,
 				RankItem.COLUMN_ID,
 				"SeedingRank",
@@ -156,6 +171,9 @@ public class TableColumnCreator
 				ShareRatioItem.COLUMN_ID,
 				TrackerStatusItem.COLUMN_ID,
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map mapTCs = tcManager.getTableColumnsAsMap(Download.class, tableID);
@@ -172,11 +190,29 @@ public class TableColumnCreator
 				tcManager.setDefaultSortColumnName(tableID, RankItem.COLUMN_ID);
 				tc.setSortAscending(true);
 			}
+		} else if (DownloadControlBT.isProfileEnabled()) {
+			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
 	
+	private static void maybeHideDefaultLibraryColumns(Map mapTCs, String[] stockOrder, String[] hiddenOrder) {
+		List<String> current = new ArrayList<String>();
+		for (Iterator iter = mapTCs.values().iterator(); iter.hasNext();) {
+			TableColumn tc = (TableColumn) iter.next();
+			if (tc.isVisible()) {
+				current.add(tc.getName());
+			}
+		}
+		if (stockOrder.length == current.size()) {
+			List<String> stock = Arrays.asList(stockOrder);
+			if (stock.containsAll(current)) {
+				setVisibility(mapTCs, hiddenOrder);
+			}
+		}
+	}
+
 	private static boolean areNoneVisible(Map mapTCs) {
 		boolean noneVisible = true;
 		for (Iterator iter = mapTCs.values().iterator(); iter.hasNext();) {

@@ -18,10 +18,12 @@
 package com.biglybt.core.downloadcontrolbt;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
 
+import com.biglybt.core.config.COConfigurationManager;
 import com.biglybt.core.disk.DiskManager;
 import com.biglybt.core.disk.DiskManagerFileInfo;
 import com.biglybt.core.disk.DiskManagerPiece;
@@ -40,14 +42,16 @@ import com.biglybt.core.torrent.TOTorrent;
 import com.biglybt.core.util.ByteFormatter;
 
 /**
- * Facade for the DownLoadControlBT first-phase experiment: persist one
- * selected file per torrent, compute the sole active piece from
+ * Facade for the DownLoadControlBT experiment: persist control policy,
+ * an optional strict file queue, and the sole active piece from
  * disk-verified state, and expose the eligibility gate used by core
  * allocation paths.
  * <p>
- * Sequential and random selected-file plans are supported. This phase
- * does not implement bans, speed policy, short retry timers, or queue
- * demotion.
+ * Sequential and random selected-file plans are supported. Auto file
+ * queue downloads exactly one unskipped nonempty file at a time, ordered
+ * by numeric priority descending then file index. This phase does not
+ * implement bans, speed policy, short retry timers, queue demotion, or
+ * block-level control.
  */
 public final class DownloadControlBT
 {
@@ -56,6 +60,10 @@ public final class DownloadControlBT
 	public static final int MODE_OFF = DownloadControlStrictOrder.MODE_OFF;
 	public static final int MODE_SEQUENTIAL = DownloadControlStrictOrder.MODE_SEQUENTIAL;
 	public static final int MODE_RANDOM = DownloadControlStrictOrder.MODE_RANDOM;
+	public static final int POLICY_UNSET = DownloadControlFileQueue.POLICY_UNSET;
+	public static final int POLICY_AUTO = DownloadControlFileQueue.POLICY_AUTO;
+	public static final int POLICY_MANUAL = DownloadControlFileQueue.POLICY_MANUAL;
+	public static final int POLICY_OFF = DownloadControlFileQueue.POLICY_OFF;
 
 	private static final LogIDs LOGID = LogIDs.PIECES;
 	private static final String LOG_PREFIX = "DownLoadControlBT: ";
@@ -137,8 +145,92 @@ public final class DownloadControlBT
 		DownloadManager		dm,
 		int					fileIndex )
 	{
-		return DownloadControlStrictOrder.modeLetterForFile(
-			isEnabled( dm ), getStoredMode( dm ), getSelectedFileIndex( dm ), fileIndex );
+		DiskManagerFileInfo file = getFile( dm, fileIndex );
+		boolean blank = file == null || file.isSkipped() || file.getLength() <= 0;
+		return DownloadControlFileQueue.modeLetterForFile(
+			getPolicy( dm ),
+			isEnabled( dm ),
+			getStoredMode( dm ),
+			getSelectedFileIndex( dm ),
+			fileIndex,
+			getFileModeOverride( dm, fileIndex ),
+			blank );
+	}
+
+	public static boolean
+	isProfileEnabled()
+	{
+		try{
+			return COConfigurationManager.getBooleanParameter(
+				DownloadControlBTDefaults.CFG_PROFILE, false );
+		}catch( Throwable t ){
+			return false;
+		}
+	}
+
+	public static boolean
+	isAutoQueueDefault()
+	{
+		if ( !isProfileEnabled()){
+			return false;
+		}
+		try{
+			return COConfigurationManager.getBooleanParameter(
+				DownloadControlBTDefaults.CFG_AUTO_QUEUE_DEFAULT, true );
+		}catch( Throwable t ){
+			return true;
+		}
+	}
+
+	public static boolean
+	isDefaultForceStart()
+	{
+		try{
+			return COConfigurationManager.getBooleanParameter(
+				DownloadControlBTDefaults.CFG_DEFAULT_FORCE_START, false );
+		}catch( Throwable t ){
+			return false;
+		}
+	}
+
+	public static int
+	getPolicy(
+		DownloadManager		dm )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return POLICY_UNSET;
+		}
+		return DownloadControlFileQueue.resolvePolicy(
+			isEnabled( dm ),
+			dm.getDownloadState().getIntAttribute( DownloadManagerState.AT_DLCBT_POLICY ));
+	}
+
+	public static boolean
+	isAutoQueue(
+		DownloadManager		dm )
+	{
+		return getPolicy( dm ) == POLICY_AUTO;
+	}
+
+	public static int
+	getFileModeOverride(
+		DownloadManager		dm,
+		int					fileIndex )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return MODE_OFF;
+		}
+		return DownloadControlFileQueue.fileModeOverride(
+			readFileModes( dm.getDownloadState()), fileIndex );
+	}
+
+	public static int
+	getEffectiveFileMode(
+		DownloadManager		dm,
+		int					fileIndex )
+	{
+		return DownloadControlFileQueue.effectiveFileMode(
+			getStoredMode( dm ), getFileModeOverride( dm, fileIndex ));
 	}
 
 	public static boolean
@@ -163,6 +255,37 @@ public final class DownloadControlBT
 			return false;
 		}
 
+		if ( getPolicy( dm ) == POLICY_AUTO ){
+			setFileModeOverride( dm, fileIndex, mode );
+			if ( getSelectedFileIndex( dm ) == fileIndex ){
+				return activateFile( dm, fileIndex, mode, POLICY_AUTO );
+			}
+			log( dm,
+				"stored per-file mode override " +
+				DownloadControlStrictOrder.modeLetter( mode ) +
+				" for fileIndex=" + fileIndex +
+				" ; auto file queue stays pinned to fileIndex=" +
+				getSelectedFileIndex( dm ));
+			return true;
+		}
+
+		return activateFile( dm, fileIndex, mode, POLICY_MANUAL );
+	}
+
+	static boolean
+	activateFile(
+		DownloadManager		dm,
+		int					fileIndex,
+		int					mode,
+		int					policy )
+	{
+		if ( dm == null ){
+			return false;
+		}
+		if ( mode != MODE_SEQUENTIAL && mode != MODE_RANDOM ){
+			return false;
+		}
+
 		DiskManagerFileInfo file = getFile( dm, fileIndex );
 		if ( file == null ){
 			log( dm, "refused enable: invalid or missing file index " + fileIndex );
@@ -172,12 +295,22 @@ public final class DownloadControlBT
 		int first = file.getFirstPieceNumber();
 		int last = file.getLastPieceNumber();
 		boolean sameFileAndMode =
-			isEnabledForFile( dm, fileIndex ) && getMode( dm ) == mode;
+			isEnabledForFile( dm, fileIndex ) && getEffectiveFileMode( dm, fileIndex ) == mode;
 
 		DownloadManagerState state = dm.getDownloadState();
-		state.setIntAttribute( DownloadManagerState.AT_DLCBT_FILE_INDEX, fileIndex );
-		state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
-		state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, mode );
+		synchronized( state ){
+			state.setIntAttribute( DownloadManagerState.AT_DLCBT_FILE_INDEX, fileIndex );
+			state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
+			if ( policy == POLICY_AUTO ){
+				int stored = getStoredMode( dm );
+				if ( stored != MODE_SEQUENTIAL && stored != MODE_RANDOM ){
+					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+				}
+				setFileModeOverride( dm, fileIndex, mode );
+			}else{
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, mode );
+			}
+			state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, policy );
 
 		int[] order;
 		long seed = 0;
@@ -220,6 +353,7 @@ public final class DownloadControlBT
 				"one hash-verified piece at a time; wait if unavailable" );
 		}
 
+		}
 		cancelOffTargetRequests( dm );
 		return true;
 	}
@@ -232,10 +366,50 @@ public final class DownloadControlBT
 			return;
 		}
 		DownloadManagerState state = dm.getDownloadState();
-		state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, false );
-		state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_OFF );
-		clearPlan( state );
-		log( dm, "disabled; normal piece picking restored" );
+		synchronized( state ){
+			state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, false );
+			state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_OFF );
+			state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_OFF );
+			clearPlan( state );
+		}
+		log( dm, "disabled; experimental gates off; normal piece picking restored" );
+	}
+
+	public static void
+	setAutoQueueEnabled(
+		DownloadManager		dm,
+		boolean				auto )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return;
+		}
+		if ( auto ){
+			int previousPolicy = getPolicy( dm );
+			int previousFile = getSelectedFileIndex( dm );
+			int previousMode = getMode( dm );
+			DownloadManagerState state = dm.getDownloadState();
+			synchronized( state ){
+				if ( previousPolicy == POLICY_MANUAL && previousFile >= 0
+					&& ( previousMode == MODE_SEQUENTIAL || previousMode == MODE_RANDOM )){
+					setFileModeOverride( dm, previousFile, previousMode );
+				}
+				if ( getStoredMode( dm ) != MODE_SEQUENTIAL && getStoredMode( dm ) != MODE_RANDOM ){
+					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+				}
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_AUTO );
+				state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
+			}
+			refreshAutoActiveFile( dm, dm.getDiskManager());
+			log( dm, "auto file queue enabled; default piece mode Random unless a file override is set" );
+			return;
+		}
+		if ( getPolicy( dm ) == POLICY_AUTO ){
+			DownloadManagerState state = dm.getDownloadState();
+			synchronized( state ){
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_MANUAL );
+			}
+			log( dm, "auto file queue disabled; keeping one-file manual control if a file is active" );
+		}
 	}
 
 	/**
@@ -257,8 +431,32 @@ public final class DownloadControlBT
 		DownloadManager		dm,
 		DiskManager			diskManager )
 	{
+		return getAllowedPieceNumber( dm, diskManager, true );
+	}
+
+	static int
+	getAllowedPieceNumber(
+		DownloadManager		dm,
+		DiskManager			diskManager,
+		boolean				allowAdvance )
+	{
 		if ( !isEnabled( dm )){
 			return UNRESTRICTED;
+		}
+
+		if ( allowAdvance && isAutoQueue( dm )){
+			refreshAutoActiveFile( dm, diskManager );
+			if ( !isEnabled( dm )){
+				return UNRESTRICTED;
+			}
+			if ( DownloadControlFileQueue.pickPinnedOrNext(
+					snapshotFiles( dm, diskManager ),
+					getSelectedFileIndex( dm ),
+					createVerifiedView( diskManager )) < 0 ){
+				logOnce( dm, "queue-complete",
+					"auto file queue has no remaining unskipped nonempty unfinished file; requesting nothing" );
+				return NO_PIECE;
+			}
 		}
 
 		int fileIndex = getSelectedFileIndex( dm );
@@ -269,10 +467,16 @@ public final class DownloadControlBT
 			return NO_PIECE;
 		}
 
+		if ( file.isSkipped()){
+			logOnce( dm, "skipped-" + fileIndex,
+				"selected fileIndex=" + fileIndex + " is skipped; requesting nothing" );
+			return NO_PIECE;
+		}
+
 		boolean empty = file.getLength() <= 0 || file.getNbPieces() <= 0;
 		int first = file.getFirstPieceNumber();
 		int last = file.getLastPieceNumber();
-		int mode = getMode( dm );
+		int mode = getEffectiveFileMode( dm, fileIndex );
 
 		int[] order;
 		if ( mode == MODE_RANDOM ){
@@ -308,10 +512,13 @@ public final class DownloadControlBT
 		}
 
 		if ( decision.status == DownloadControlStrictOrder.STATUS_COMPLETE ){
-			logOnce( dm, "complete",
+			logOnce( dm, "complete-" + fileIndex,
 				"selected fileIndex=" + fileIndex +
 				" pieces [" + first + ".." + last +
-				"] are hash-verified; requesting nothing until mode is disabled" );
+				"] are hash-verified; " +
+				( isAutoQueue( dm )
+					? "auto file queue will move to the next unfinished file"
+					: "requesting nothing until mode is disabled" ));
 			return NO_PIECE;
 		}
 
@@ -438,7 +645,7 @@ public final class DownloadControlBT
 		DiskManager diskManager = pm.getDiskManager();
 		PEPeerControl peerControl =
 			(pm instanceof PEPeerControl) ? (PEPeerControl)pm : null;
-		int allowed = getAllowedPieceNumber( peerControl, diskManager );
+		int allowed = getAllowedPieceNumber( dm, diskManager, false );
 		if ( allowed == UNRESTRICTED ){
 			return;
 		}
@@ -533,7 +740,190 @@ public final class DownloadControlBT
 		return null;
 	}
 
-	static int[]
+	public static void
+	applyNewTorrentDefaults(
+		DownloadManager				dm,
+		boolean						explicitOff,
+		boolean						autoQueue,
+		Map<Integer, Integer>		fileModes )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return;
+		}
+		if ( dm.getDownloadState().getFlag( DownloadManagerState.FLAG_METADATA_DOWNLOAD )){
+			return;
+		}
+		if ( getPolicy( dm ) != POLICY_UNSET ){
+			return;
+		}
+
+		if ( fileModes == null ){
+			fileModes = new HashMap<>();
+		}
+		storeFileModes( dm, fileModes );
+
+		DownloadControlFileQueue.FileSnap[] files = snapshotFiles( dm, dm.getDiskManager());
+		DownloadControlFileQueue.NewTorrentDecision decision =
+			DownloadControlFileQueue.planNewTorrent(
+				files,
+				isProfileEnabled(),
+				false,
+				explicitOff,
+				autoQueue,
+				fileModes,
+				createVerifiedView( dm.getDiskManager()));
+
+		if ( decision.policy == POLICY_OFF ){
+			disable( dm );
+			return;
+		}
+		if ( decision.isNoOp()){
+			return;
+		}
+
+		if ( decision.policy == POLICY_AUTO ){
+			DownloadManagerState state = dm.getDownloadState();
+			synchronized( state ){
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_AUTO );
+				state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+			}
+			if ( decision.initialFileIndex >= 0 ){
+				activateFile(
+					dm,
+					decision.initialFileIndex,
+					decision.initialFileMode,
+					POLICY_AUTO );
+			}else{
+				log( dm, "auto file queue enabled on add but no eligible file is ready yet" );
+			}
+			return;
+		}
+
+		if ( decision.policy == POLICY_MANUAL && decision.initialFileIndex >= 0 ){
+			activateFile(
+				dm,
+				decision.initialFileIndex,
+				decision.initialFileMode,
+				POLICY_MANUAL );
+		}
+	}
+
+	static void
+	refreshAutoActiveFile(
+		DownloadManager		dm,
+		DiskManager			diskManager )
+	{
+		if ( dm == null || dm.getDownloadState() == null || !isAutoQueue( dm ) || !isEnabled( dm )){
+			return;
+		}
+		DownloadManagerState state = dm.getDownloadState();
+		synchronized( state ){
+			DownloadControlFileQueue.FileSnap[] files = snapshotFiles( dm, diskManager );
+			int pinned = getSelectedFileIndex( dm );
+			int next = DownloadControlFileQueue.pickPinnedOrNext(
+				files, pinned, createVerifiedView( diskManager ));
+			if ( next < 0 ){
+				return;
+			}
+			int mode = getEffectiveFileMode( dm, next );
+			boolean need = next != pinned || !isEnabledForFile( dm, next );
+			if ( mode == MODE_RANDOM ){
+				DownloadControlFileQueue.FileSnap file = DownloadControlFileQueue.fileAt( files, next );
+				if ( file != null
+					&& !DownloadControlStrictOrder.isValidPlan(
+						readStoredPlan( state ), file.firstPiece, file.lastPiece )){
+					need = true;
+				}
+			}
+			if ( need ){
+				log( dm,
+					"auto file queue selecting fileIndex=" + next +
+					" mode=" + DownloadControlStrictOrder.modeLetter( mode ) +
+					" (previous pinned fileIndex=" + pinned + ")" );
+				activateFile( dm, next, mode, POLICY_AUTO );
+			}
+		}
+	}
+
+	static DownloadControlFileQueue.FileSnap[]
+	snapshotFiles(
+		DownloadManager		dm,
+		DiskManager			diskManager )
+	{
+		DiskManagerFileInfo[] infos = null;
+		if ( diskManager != null ){
+			infos = diskManager.getFiles();
+		}
+		if (( infos == null || infos.length == 0 )
+			&& dm != null && dm.getDiskManagerFileInfoSet() != null ){
+			infos = dm.getDiskManagerFileInfoSet().getFiles();
+		}
+		if ( infos == null ){
+			return new DownloadControlFileQueue.FileSnap[0];
+		}
+		DownloadControlFileQueue.FileSnap[] snaps = new DownloadControlFileQueue.FileSnap[infos.length];
+		for (int i = 0; i < infos.length; i++){
+			DiskManagerFileInfo file = infos[i];
+			if ( file == null ){
+				snaps[i] = new DownloadControlFileQueue.FileSnap( i, 0, -1, -1, 0, 0, true );
+				continue;
+			}
+			snaps[i] = new DownloadControlFileQueue.FileSnap(
+				file.getIndex(),
+				file.getLength(),
+				file.getFirstPieceNumber(),
+				file.getLastPieceNumber(),
+				file.getNbPieces(),
+				file.getPriority(),
+				file.isSkipped());
+		}
+		return snaps;
+	}
+
+	static Map<Integer, Integer>
+	readFileModes(
+		DownloadManagerState		state )
+	{
+		if ( state == null ){
+			return new HashMap<>();
+		}
+		return DownloadControlFileQueue.parseFileModes(
+			state.getListAttribute( DownloadManagerState.AT_DLCBT_FILE_MODES ));
+	}
+
+	static void
+	storeFileModes(
+		DownloadManager				dm,
+		Map<Integer, Integer>		modes )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return;
+		}
+		dm.getDownloadState().setListAttribute(
+			DownloadManagerState.AT_DLCBT_FILE_MODES,
+			DownloadControlFileQueue.serializeFileModes( modes ));
+	}
+
+	static void
+	setFileModeOverride(
+		DownloadManager		dm,
+		int					fileIndex,
+		int					mode )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return;
+		}
+		Map<Integer, Integer> modes = readFileModes( dm.getDownloadState());
+		if ( mode == MODE_SEQUENTIAL || mode == MODE_RANDOM ){
+			modes.put( Integer.valueOf( fileIndex ), Integer.valueOf( mode ));
+		}else{
+			modes.remove( Integer.valueOf( fileIndex ));
+		}
+		storeFileModes( dm, modes );
+	}
+
+		static int[]
 	readStoredPlan(
 		DownloadManagerState		state )
 	{

@@ -26,9 +26,11 @@ import com.biglybt.ui.swt.views.table.CoreTableColumnSWT;
 
 /**
  * Files-view letter for the DownLoadControlBT experiment only:
- * S sequential, R random, blank if this file is not the selected
- * experimental file or the mode is off. This is not BiglyBT's
- * ordinary sequential-from-file picker flag.
+ * S sequential, R random, blank if the file is skipped or the
+ * experiment is off. In auto file queue the letter is shown for
+ * each controlled queued file; in manual mode it is shown only
+ * on the selected file. This is not BiglyBT's ordinary
+ * sequential-from-file picker flag.
  */
 public class DLCModeItem
 	extends CoreTableColumnSWT

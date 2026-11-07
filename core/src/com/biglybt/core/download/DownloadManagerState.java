@@ -118,6 +118,8 @@ DownloadManagerState
 	public static final String AT_DLCBT_PLAN				= "dlcbt.plan";		// String[] piece numbers
 	public static final String AT_DLCBT_PLAN_SEED			= "dlcbt.plan.seed";	// long
 	public static final String AT_DLCBT_PLAN_VER			= "dlcbt.plan.ver";	// int
+	public static final String AT_DLCBT_POLICY				= "dlcbt.policy";	// int, 0=unset, 1=auto, 2=manual, 3=off
+	public static final String AT_DLCBT_FILE_MODES			= "dlcbt.filemodes";	// String[] "index=mode" per-file overrides
 
 	
 	public static Object[][] ATTRIBUTE_DEFAULTS = {
@@ -137,6 +139,7 @@ DownloadManagerState
 		{ AT_DLCBT_MODE,							new Integer( 0 )},
 		{ AT_DLCBT_PLAN_SEED,						new Long( 0 )},
 		{ AT_DLCBT_PLAN_VER,						new Integer( 0 )},
+		{ AT_DLCBT_POLICY,							new Integer( 0 )},
 	};
 
 	public static final long FLAG_ONLY_EVER_SEEDED						= Download.FLAG_ONLY_EVER_SEEDED;

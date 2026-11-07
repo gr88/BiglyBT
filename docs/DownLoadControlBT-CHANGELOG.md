@@ -35,6 +35,92 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## Next increment — isolated file queue, profile defaults, Force Start add-mode
+
+Source and unit tests live on branch `DownLoadControlBT`. Isolated Linux
+test archives use an America/Chicago `YYYYMMDDHHMM` version in the
+archive name, extracted directory, and `version.txt` (plus a newline).
+`SOURCE.txt` still records the upstream BiglyBT version and full git
+commit. See the matching GitHub prerelease for the archive and SHA256
+sidecar. Older prereleases are retained.
+
+This increment was not GUI-tested in a live desktop session. Column
+defaults, add-dialog behaviour, Force Start menu visibility, and the
+library Advanced List were verified at source and with unit tests / an
+isolated `--init-only` inventory. The user will test the build. No test
+torrent was placed on the public network.
+
+### Experiment behaviour
+
+- Isolated profile only (`dlcbt.profile.enabled`). Regular BiglyBT
+  config and a non-profile run of this fork keep stock defaults.
+- New torrents added through Open Torrent Options (not a restored
+  library item, not a magnet metadata placeholder, not a seeding-only
+  add) default to auto file queue with Random interiors when the
+  profile is on. Auto queue can be unchecked. Off disables every
+  DownLoadControlBT gate for that torrent and restores normal piece
+  picking; it is not a file-skip.
+- Auto queue orders selected unskipped nonempty files by numeric
+  priority descending, then file index. Exactly one file is active
+  until all of its containing pieces are hash-verified. The active file
+  stays pinned if the user later edits priorities. After that file
+  finishes, or if the user skips it, the remaining queue is recomputed.
+  Restart keeps the pinned file and its random plan. Explicit Off is
+  persisted and is not reactivated on restore.
+- Pre-add Sequential/Random choices are stored per file and carried
+  onto the added torrent. In auto queue they are per-file piece-mode
+  overrides, not a second concurrent file. Legacy torrents that already
+  had explicit Sequential/Random stay in one-file manual mode unless
+  the user enables Auto file queue.
+- Files-view DLC letters show `S` or `R` for controlled queued files in
+  auto mode (and still only the selected file in manual mode). Skipped
+  files and Off stay blank. No extra glyph was added.
+- Shared whole-boundary pieces still count as verified for every file
+  that contains them. There is still no block-level option and no
+  request-policy, retry, or ban work.
+
+### Isolated profile defaults (set only if missing; nonempty schedules kept)
+
+- Always show the add dialog (`ui.addtorrent.openoptions=always`).
+- Add mode defaults to Force Started unless the user already chose
+  “Default Start Torrents Stopped”.
+- All peer-source defaults remain on. Public, I2P, and Tor network
+  selection defaults are on. I2P/Tor plugins are not installed and this
+  is not a privacy feature. Private-torrent mandatory restrictions are
+  unchanged.
+- Empty or missing speed schedules get exactly:
+  `peer_set UpPeers=All,peer_up=25.1k` and
+  `peer_set DownPeers=All,peer_down=251.1k` (per-peer limits, not
+  session totals).
+- Library Advanced List (`Library*.viewmode=1`) and details tabs.
+- Default-hidden library columns, remaining available in column setup:
+  Order (`#`), Play Now (`TorrentStream`), Subscribe, Health, Comment
+  Icon, and Seeding Rank. Hidden Order remains the default sort.
+  Saved custom layouts are left alone; only an exact previous stock
+  layout is migrated.
+
+### Force Start parity
+
+- Force Start is already present beside Queue in the main library
+  context menu (and the toolbar) when user mode is Intermediate+ or
+  `Always Show Force Start` is on. The isolated profile turns that
+  flag on if it was unset.
+- Force Start was added next to Queue on the download mini-bar and the
+  category menu, and the tag menu no longer hides it when
+  `Always Show Force Start` is on. The meaning of Force Start is
+  unchanged.
+
+### Known limitations
+
+- Column drag after the earlier 5-pixel header hit-test change is still
+  reported broken. Size Column to Fit works. No further GUI loop was
+  spent; this remains unresolved.
+- Magnet metadata placeholders are not given auto queue. If a magnet
+  later becomes a real torrent without going through Open Torrent
+  Options again, auto queue is not silently applied.
+- No live GUI verification of the new defaults, menus, or column hides.
+- No public-network test torrent was used.
+
 ## 2026-11-07 — Sequential + Random, Files-view letter, isolated package fixes
 
 Source and unit tests live on branch `DownLoadControlBT`. Isolated Linux
