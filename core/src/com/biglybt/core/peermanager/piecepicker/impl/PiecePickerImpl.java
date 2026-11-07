@@ -26,6 +26,7 @@ import com.biglybt.core.config.ConfigKeys;
 import com.biglybt.core.disk.*;
 import com.biglybt.core.disk.impl.piecemapper.DMPieceList;
 import com.biglybt.core.disk.impl.piecemapper.DMPieceMap;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.logging.LogEvent;
 import com.biglybt.core.logging.LogIDs;
 import com.biglybt.core.logging.Logger;
@@ -1616,6 +1617,10 @@ implements PiecePicker
 			// probably should have found something since chose to try; probably not interested anymore
 			// (or maybe Needed but not Done pieces are otherwise not requestable)
 			// pt.checkInterested();
+			DownloadControlBT.noteNoCandidate(
+				peerControl,
+				diskManager,
+				DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager));
 			return 0;
 		}
 
@@ -1742,6 +1747,10 @@ implements PiecePicker
 			rarestStartedPieces.add(pePiece);
 		}
 
+		if (requested > 0){
+			DownloadControlBT.noteRequestsAllocated(peerControl, diskManager, pieceNumber, requested);
+		}
+
 		return requested;
 	}
 
@@ -1766,6 +1775,8 @@ implements PiecePicker
 			return( false );
 		}
 
+		final int dlcbtAllowed = DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager);
+
 		String rta_log_str = LOG_RTA?pt.getIp():null;
 
 		try{
@@ -1784,6 +1795,11 @@ implements PiecePicker
 
 
 			for ( int i=startI; i <=endI; i++){
+
+				if ( !DownloadControlBT.isNewRequestAllowed( dlcbtAllowed, i )){
+
+					continue;
+				}
 
 				long piece_rta = provider_piece_rtas[i];
 
@@ -2070,6 +2086,8 @@ implements PiecePicker
 		if (peerHavePieces ==null ||peerHavePieces.nbSet <=0)
 			return -1;
 
+		final int dlcbtAllowed = DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager);
+
 		// piece number and its block number that we'll try to DL
 
 		int[] reservedPieceNumbers = pt.getReservedPieceNumbers();
@@ -2088,7 +2106,8 @@ implements PiecePicker
 
 					if ( peerReserved != null && peerReserved.equals( pt.getIp())){
 
-						if ( peerHavePieces.flags[reservedPieceNumber] &&pePiece.isRequestable()){
+						if ( peerHavePieces.flags[reservedPieceNumber] &&pePiece.isRequestable()
+								&& DownloadControlBT.isNewRequestAllowed( dlcbtAllowed, reservedPieceNumber )){
 
 							return reservedPieceNumber;
 						}else{
@@ -2182,6 +2201,11 @@ implements PiecePicker
         		// is the piece available from this peer?
 
         	if ( peerHavePieces.flags[i]){
+
+        		if ( !DownloadControlBT.isNewRequestAllowed( dlcbtAllowed, i )){
+
+        			continue;
+        		}
 
         		priority = startPriorities[i];
 
@@ -2481,6 +2505,13 @@ implements PiecePicker
 
 	private void checkEndGameMode()
 	{
+		if ( DownloadControlBT.isRestrictingNewRequests( peerControl, diskManager )){
+			if ( endGameMode ){
+				leaveEndGameMode();
+			}
+			return;
+		}
+
 		if (peerControl.getNbSeeds() +peerControl.getNbPeers() <3){
 			return;
 		}
@@ -2722,6 +2753,8 @@ implements PiecePicker
 	{
 		synchronized( endGameModeChunkLock ){
 
+			final int dlcbtAllowed = DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager);
+
 			for (int i =0; i <nbPieces; i++ ){
 
 				final DiskManagerPiece dmPiece =dmPieces[i];
@@ -2729,6 +2762,11 @@ implements PiecePicker
 					// Pieces not Needed or not needing more downloading are of no interest
 
 				if (!dmPiece.isInteresting()){
+
+					continue;
+				}
+
+				if ( !DownloadControlBT.isNewRequestAllowed( dlcbtAllowed, i )){
 
 					continue;
 				}
@@ -2806,6 +2844,12 @@ implements PiecePicker
 			return;
 		}
 
+		if ( !DownloadControlBT.isNewRequestAllowed(
+				DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager),
+				pePiece.getPieceNumber())){
+			return;
+		}
+
 		synchronized( endGameModeChunkLock ){
 
 			final int nbChunks =pePiece.getNbBlocks();
@@ -2836,6 +2880,8 @@ implements PiecePicker
 			return 0;
 		}
 
+		final int dlcbtAllowed = DownloadControlBT.getAllowedPieceNumber(peerControl, diskManager);
+
 		synchronized( endGameModeChunkLock ){
 
 			Iterator<EndGameModeChunk>	it = endGameModeChunks.iterator();
@@ -2845,6 +2891,11 @@ implements PiecePicker
 				EndGameModeChunk chunk = it.next();
 
 				int pieceNumber = chunk.getPieceNumber();
+
+				if ( !DownloadControlBT.isNewRequestAllowed( dlcbtAllowed, pieceNumber )){
+
+					continue;
+				}
 
 				if ( dmPieces[pieceNumber].isWritten(chunk.getBlockNumber())){
 
@@ -3437,6 +3488,7 @@ implements PiecePicker
 					neededUndonePieceChange++;
 				}
 			}
+			DownloadControlBT.notePieceDoneChanged( diskManager, dmPiece );
 		}
 	}
 

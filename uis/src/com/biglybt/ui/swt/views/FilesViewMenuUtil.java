@@ -45,6 +45,7 @@ import com.biglybt.core.disk.DiskManagerFileInfoSet;
 import com.biglybt.core.download.DownloadManager;
 import com.biglybt.core.download.DownloadManagerListener;
 import com.biglybt.core.download.DownloadManagerState;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.download.impl.DownloadManagerAdapter;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.peer.PEPeerManager;
@@ -367,6 +368,12 @@ public class FilesViewMenuUtil
 		itemDelete.setData("Priority", PRIORITY_DELETE);
 		Messages.setLanguageText(itemDelete, "wizard.multitracker.delete"); // lazy but we're near release
 
+		if ( all_files.size() > 1 ){
+			final MenuItem itemDLCMultiple = new MenuItem(menu, SWT.PUSH);
+			Messages.setLanguageText(itemDLCMultiple, "menu.downloadcontrolbt.multiple");
+			itemDLCMultiple.setEnabled( false );
+		}
+
 		if ( all_files.size() == 1 ){
 			DiskManagerFileInfo file = all_files.get(0);
 			final MenuItem itemSequential = new MenuItem(menu, SWT.CHECK);
@@ -399,6 +406,36 @@ public class FilesViewMenuUtil
 							}else{
 								
 								pp.clearSequential();
+							}
+						}
+					});
+			}
+
+			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CHECK);
+			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt.strict");
+			itemDownloadControlBT.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.strict.tooltip" ));
+
+			DownloadManager dlc_dm = file.getDownloadManager();
+			boolean dlc_enabled = DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex());
+			itemDownloadControlBT.setSelection( dlc_enabled );
+
+			if ( file.getLength() <= 0 || file.isSkipped()){
+				itemDownloadControlBT.setEnabled( false );
+			}else{
+				itemDownloadControlBT.addListener(
+					SWT.Selection,
+					new Listener()
+					{
+						@Override
+						public void
+						handleEvent(
+							Event arg )
+						{
+							if ( itemDownloadControlBT.getSelection()){
+								DownloadControlBT.enableForFile( dlc_dm, file.getIndex());
+							}else{
+								DownloadControlBT.disable( dlc_dm );
 							}
 						}
 					});

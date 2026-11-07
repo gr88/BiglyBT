@@ -33,6 +33,7 @@ import com.biglybt.core.config.ConfigKeys;
 import com.biglybt.core.config.ParameterListener;
 import com.biglybt.core.disk.*;
 import com.biglybt.core.disk.DiskManager.DownloadEndedProgress;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.ipfilter.*;
 import com.biglybt.core.logging.*;
@@ -3075,6 +3076,7 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 	 */
 	@Override
 	public void writeBlock(int pieceNumber, int offset, DirectByteBuffer data, Object sender, boolean cancel){
+		DownloadControlBT.noteIncomingBlock(this, pieceNumber, offset);
 		final int blockNumber = offset / DiskManager.BLOCK_SIZE;
 		final DiskManagerPiece dmPiece = dm_pieces[pieceNumber];
 		if(dmPiece.isWritten(blockNumber)){

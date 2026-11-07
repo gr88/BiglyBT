@@ -112,6 +112,9 @@ DownloadManagerState
 	
 	public static final String AT_VIEW_FILTERS				= "vfilt";			// Map
 
+	public static final String AT_DLCBT_ENABLED				= "dlcbt.enabled";	// boolean, def=false
+	public static final String AT_DLCBT_FILE_INDEX			= "dlcbt.fileidx";	// int, def=-1
+
 	
 	public static Object[][] ATTRIBUTE_DEFAULTS = {
 		{ AT_VERSION,								new Integer( -1 )},
@@ -125,6 +128,8 @@ DownloadManagerState
 		{ AT_FILE_ALLOC_STRATEGY,					new Long( FAS_DEFAULT )},
 		{ AT_FILE_ALLOC_ORDER,						new Long( -1 )},
 		{ AT_SKIPPED_FILESET_SIZE,					new Long( -1 )},
+		{ AT_DLCBT_ENABLED,							new Long( 0 )},
+		{ AT_DLCBT_FILE_INDEX,						new Integer( -1 )},
 	};
 
 	public static final long FLAG_ONLY_EVER_SEEDED						= Download.FLAG_ONLY_EVER_SEEDED;
