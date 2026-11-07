@@ -411,35 +411,54 @@ public class FilesViewMenuUtil
 					});
 			}
 
-			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CHECK);
-			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt.strict");
+			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
+			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
 			itemDownloadControlBT.setToolTipText(
-				MessageText.getString( "menu.downloadcontrolbt.strict.tooltip" ));
+				MessageText.getString( "menu.downloadcontrolbt.tooltip" ));
+
+			Menu menuDLC = new Menu(menu.getShell(), SWT.DROP_DOWN);
+			itemDownloadControlBT.setMenu(menuDLC);
 
 			DownloadManager dlc_dm = file.getDownloadManager();
-			boolean dlc_enabled = DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex());
-			itemDownloadControlBT.setSelection( dlc_enabled );
+			boolean dlc_this_file = DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex());
+			int dlc_mode = dlc_this_file ? DownloadControlBT.getMode( dlc_dm ) : DownloadControlBT.MODE_OFF;
+			boolean dlc_usable = file.getLength() > 0 && !file.isSkipped();
 
-			if ( file.getLength() <= 0 || file.isSkipped()){
-				itemDownloadControlBT.setEnabled( false );
-			}else{
-				itemDownloadControlBT.addListener(
-					SWT.Selection,
-					new Listener()
-					{
-						@Override
-						public void
-						handleEvent(
-							Event arg )
-						{
-							if ( itemDownloadControlBT.getSelection()){
-								DownloadControlBT.enableForFile( dlc_dm, file.getIndex());
-							}else{
-								DownloadControlBT.disable( dlc_dm );
-							}
-						}
-					});
-			}
+			final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
+			itemDLCOff.setSelection( dlc_mode == DownloadControlBT.MODE_OFF );
+			itemDLCOff.setEnabled( dlc_usable || dlc_this_file );
+			itemDLCOff.addListener( SWT.Selection, event -> {
+				if ( itemDLCOff.getSelection()){
+					if ( DownloadControlBT.isEnabledForFile( dlc_dm, file.getIndex())){
+						DownloadControlBT.disable( dlc_dm );
+					}
+				}
+			});
+
+			final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
+			itemDLCSequential.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.sequential.tooltip" ));
+			itemDLCSequential.setSelection( dlc_mode == DownloadControlBT.MODE_SEQUENTIAL );
+			itemDLCSequential.setEnabled( dlc_usable );
+			itemDLCSequential.addListener( SWT.Selection, event -> {
+				if ( itemDLCSequential.getSelection()){
+					DownloadControlBT.enableForFile( dlc_dm, file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
+				}
+			});
+
+			final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
+			itemDLCRandom.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.random.tooltip" ));
+			itemDLCRandom.setSelection( dlc_mode == DownloadControlBT.MODE_RANDOM );
+			itemDLCRandom.setEnabled( dlc_usable );
+			itemDLCRandom.addListener( SWT.Selection, event -> {
+				if ( itemDLCRandom.getSelection()){
+					DownloadControlBT.enableForFile( dlc_dm, file.getIndex(), DownloadControlBT.MODE_RANDOM );
+				}
+			});
 			
 			final MenuItem setThumb = new MenuItem(menu, SWT.PUSH);
 			Messages.setLanguageText(setThumb, "menu.set.file.as.thumb");

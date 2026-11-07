@@ -114,6 +114,10 @@ DownloadManagerState
 
 	public static final String AT_DLCBT_ENABLED				= "dlcbt.enabled";	// boolean, def=false
 	public static final String AT_DLCBT_FILE_INDEX			= "dlcbt.fileidx";	// int, def=-1
+	public static final String AT_DLCBT_MODE				= "dlcbt.mode";		// int, 0=off/legacy, 1=sequential, 2=random
+	public static final String AT_DLCBT_PLAN				= "dlcbt.plan";		// String[] piece numbers
+	public static final String AT_DLCBT_PLAN_SEED			= "dlcbt.plan.seed";	// long
+	public static final String AT_DLCBT_PLAN_VER			= "dlcbt.plan.ver";	// int
 
 	
 	public static Object[][] ATTRIBUTE_DEFAULTS = {
@@ -130,6 +134,9 @@ DownloadManagerState
 		{ AT_SKIPPED_FILESET_SIZE,					new Long( -1 )},
 		{ AT_DLCBT_ENABLED,							new Long( 0 )},
 		{ AT_DLCBT_FILE_INDEX,						new Integer( -1 )},
+		{ AT_DLCBT_MODE,							new Integer( 0 )},
+		{ AT_DLCBT_PLAN_SEED,						new Long( 0 )},
+		{ AT_DLCBT_PLAN_VER,						new Integer( 0 )},
 	};
 
 	public static final long FLAG_ONLY_EVER_SEEDED						= Download.FLAG_ONLY_EVER_SEEDED;

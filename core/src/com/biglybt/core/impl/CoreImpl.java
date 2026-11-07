@@ -1261,6 +1261,17 @@ CoreImpl
 	     @Override
 	     public void runSupport() {
 			Logger.log(new LogEvent(LOGID, "Shutdown hook triggered" ));
+			// If File>Exit already finished, do not re-enter stop() (that path
+			// logged "Waiting for stop to complete" and could block the hook).
+			if ( stopping_sem.isReleasedForever()){
+				Logger.log(new LogEvent(LOGID, "Shutdown hook: stop already complete" ));
+				return;
+			}
+			if ( stopped ){
+				Logger.log(new LogEvent(LOGID, "Shutdown hook: stop already in progress, waiting" ));
+				stopping_sem.reserve();
+				return;
+			}
 			CoreImpl.this.stop();
 	     }
 	   });
@@ -2271,6 +2282,11 @@ CoreImpl
 
 		throws CoreException
 	{
+		String isolatedRestart = System.getProperty( "azureus.restart.cmd" );
+		if ( isolatedRestart != null && isolatedRestart.length() > 0 ){
+			return;
+		}
+
 		if ( getPluginManager().getPluginInterfaceByClass( "com.biglybt.update.UpdaterPatcher") == null ){
 			Logger.log(new LogAlert(LogAlert.REPEATABLE, LogAlert.AT_ERROR,
 					"Can't restart without the 'azupdater' plugin installed"));

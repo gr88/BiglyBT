@@ -20,6 +20,7 @@ package com.biglybt.core.downloadcontrolbt;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Random;
 
 import com.biglybt.core.disk.DiskManager;
 import com.biglybt.core.disk.DiskManagerFileInfo;
@@ -44,13 +45,17 @@ import com.biglybt.core.util.ByteFormatter;
  * disk-verified state, and expose the eligibility gate used by core
  * allocation paths.
  * <p>
- * This phase does not implement bans, randomised order, speed policy,
- * short retry timers, or queue demotion.
+ * Sequential and random selected-file plans are supported. This phase
+ * does not implement bans, speed policy, short retry timers, or queue
+ * demotion.
  */
 public final class DownloadControlBT
 {
 	public static final int UNRESTRICTED = DownloadControlStrictOrder.UNRESTRICTED;
 	public static final int NO_PIECE = DownloadControlStrictOrder.NO_PIECE;
+	public static final int MODE_OFF = DownloadControlStrictOrder.MODE_OFF;
+	public static final int MODE_SEQUENTIAL = DownloadControlStrictOrder.MODE_SEQUENTIAL;
+	public static final int MODE_RANDOM = DownloadControlStrictOrder.MODE_RANDOM;
 
 	private static final LogIDs LOGID = LogIDs.PIECES;
 	private static final String LOG_PREFIX = "DownLoadControlBT: ";
@@ -101,12 +106,60 @@ public final class DownloadControlBT
 		return isEnabled( dm ) && getSelectedFileIndex( dm ) == fileIndex;
 	}
 
+	public static int
+	getStoredMode(
+		DownloadManager		dm )
+	{
+		if ( dm == null || dm.getDownloadState() == null ){
+			return MODE_OFF;
+		}
+		return dm.getDownloadState().getIntAttribute(
+			DownloadManagerState.AT_DLCBT_MODE );
+	}
+
+	/**
+	 * Resolved experiment mode: {@link #MODE_OFF} when disabled;
+	 * {@link #MODE_SEQUENTIAL} when enabled with no stored mode
+	 * (legacy {@code dlcbt.enabled=true}); otherwise the stored mode.
+	 */
+	public static int
+	getMode(
+		DownloadManager		dm )
+	{
+		return DownloadControlStrictOrder.resolveMode( isEnabled( dm ), getStoredMode( dm ));
+	}
+
+	/**
+	 * Files-view letter for this row: {@code S}, {@code R}, or blank.
+	 */
+	public static String
+	getModeLetterForFile(
+		DownloadManager		dm,
+		int					fileIndex )
+	{
+		return DownloadControlStrictOrder.modeLetterForFile(
+			isEnabled( dm ), getStoredMode( dm ), getSelectedFileIndex( dm ), fileIndex );
+	}
+
 	public static boolean
 	enableForFile(
 		DownloadManager		dm,
 		int					fileIndex )
 	{
+		return enableForFile( dm, fileIndex, MODE_SEQUENTIAL );
+	}
+
+	public static boolean
+	enableForFile(
+		DownloadManager		dm,
+		int					fileIndex,
+		int					mode )
+	{
 		if ( dm == null ){
+			return false;
+		}
+		if ( mode != MODE_SEQUENTIAL && mode != MODE_RANDOM ){
+			disable( dm );
 			return false;
 		}
 
@@ -116,17 +169,56 @@ public final class DownloadControlBT
 			return false;
 		}
 
+		int first = file.getFirstPieceNumber();
+		int last = file.getLastPieceNumber();
+		boolean sameFileAndMode =
+			isEnabledForFile( dm, fileIndex ) && getMode( dm ) == mode;
+
 		DownloadManagerState state = dm.getDownloadState();
 		state.setIntAttribute( DownloadManagerState.AT_DLCBT_FILE_INDEX, fileIndex );
 		state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
+		state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, mode );
 
-		log( dm,
-			"enabled experimental strict order for fileIndex=" + fileIndex +
-			" length=" + file.getLength() +
-			" pieces=[" + file.getFirstPieceNumber() +
-			".." + file.getLastPieceNumber() +
-			"] order=first,last,then interior ascending; " +
-			"one hash-verified piece at a time; wait if unavailable" );
+		int[] order;
+		long seed = 0;
+		if ( mode == MODE_RANDOM ){
+			int[] existing = readStoredPlan( state );
+			if ( sameFileAndMode && DownloadControlStrictOrder.isValidPlan( existing, first, last )){
+				order = existing;
+				seed = state.getLongAttribute( DownloadManagerState.AT_DLCBT_PLAN_SEED );
+				log( dm,
+					"reusing persisted random plan for fileIndex=" + fileIndex +
+					" pieces=[" + first + ".." + last +
+					"] seed=" + seed +
+					" ver=" + DownloadControlStrictOrder.PLAN_VERSION +
+					" order=" + DownloadControlStrictOrder.formatPlan( order ) +
+					"; one hash-verified piece at a time; wait if unavailable" );
+			}else{
+				seed = newRandomSeed( dm, fileIndex );
+				order = DownloadControlStrictOrder.buildRandomRequestOrder(
+					first, last, new Random( seed ));
+				storePlan( state, order, seed );
+				log( dm,
+					"enabled experimental random order for fileIndex=" + fileIndex +
+					" length=" + file.getLength() +
+					" pieces=[" + first + ".." + last +
+					"] seed=" + seed +
+					" ver=" + DownloadControlStrictOrder.PLAN_VERSION +
+					" order=" + DownloadControlStrictOrder.formatPlan( order ) +
+					"; first,last,then shuffled interiors; " +
+					"one hash-verified piece at a time; wait if unavailable" );
+			}
+		}else{
+			clearPlan( state );
+			order = DownloadControlStrictOrder.buildRequestOrder( first, last );
+			log( dm,
+				"enabled experimental sequential order for fileIndex=" + fileIndex +
+				" length=" + file.getLength() +
+				" pieces=[" + first + ".." + last +
+				"] order=" + DownloadControlStrictOrder.formatPlan( order ) +
+				"; first,last,then interior ascending; " +
+				"one hash-verified piece at a time; wait if unavailable" );
+		}
 
 		cancelOffTargetRequests( dm );
 		return true;
@@ -139,8 +231,10 @@ public final class DownloadControlBT
 		if ( dm == null || dm.getDownloadState() == null ){
 			return;
 		}
-		dm.getDownloadState().setBooleanAttribute(
-			DownloadManagerState.AT_DLCBT_ENABLED, false );
+		DownloadManagerState state = dm.getDownloadState();
+		state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, false );
+		state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_OFF );
+		clearPlan( state );
 		log( dm, "disabled; normal piece picking restored" );
 	}
 
@@ -178,12 +272,27 @@ public final class DownloadControlBT
 		boolean empty = file.getLength() <= 0 || file.getNbPieces() <= 0;
 		int first = file.getFirstPieceNumber();
 		int last = file.getLastPieceNumber();
+		int mode = getMode( dm );
+
+		int[] order;
+		if ( mode == MODE_RANDOM ){
+			order = readStoredPlan( dm.getDownloadState() );
+			if ( !DownloadControlStrictOrder.isValidPlan( order, first, last )){
+				logOnce( dm, "invalid-plan",
+					"enabled random mode for fileIndex=" + fileIndex +
+					" but stored plan is missing or invalid for pieces=[" +
+					first + ".." + last + "]; requesting nothing until Random is selected again" );
+				return NO_PIECE;
+			}
+		}else{
+			order = DownloadControlStrictOrder.buildRequestOrder( first, last );
+		}
 
 		DownloadControlStrictOrder.HashVerifiedPieces verified =
 			createVerifiedView( diskManager );
 
 		DownloadControlStrictOrder.Decision decision =
-			DownloadControlStrictOrder.decide( true, empty, first, last, verified );
+			DownloadControlStrictOrder.decide( true, empty, order, verified );
 
 		if ( decision.status == DownloadControlStrictOrder.STATUS_EMPTY ){
 			logOnce( dm, "empty",
@@ -207,11 +316,12 @@ public final class DownloadControlBT
 		}
 
 		int active = decision.activePiece;
-		logOnce( dm, "active-" + active,
+		logOnce( dm, "active-" + mode + "-" + active,
 			"active piece " + active +
 			" of fileIndex=" + fileIndex +
 			" range=[" + first + ".." + last +
-			"]; will wait indefinitely if this piece is unavailable" );
+			"] mode=" + DownloadControlStrictOrder.modeLetter( mode ) +
+			"; will wait indefinitely if this piece is unavailable" );
 		return active;
 	}
 
@@ -421,6 +531,70 @@ public final class DownloadControlBT
 			}
 		}
 		return null;
+	}
+
+	static int[]
+	readStoredPlan(
+		DownloadManagerState		state )
+	{
+		if ( state == null ){
+			return new int[0];
+		}
+		return DownloadControlStrictOrder.parsePlan(
+			state.getListAttribute( DownloadManagerState.AT_DLCBT_PLAN ));
+	}
+
+	static void
+	storePlan(
+		DownloadManagerState		state,
+		int[]						order,
+		long						seed )
+	{
+		if ( state == null ){
+			return;
+		}
+		state.setListAttribute(
+			DownloadManagerState.AT_DLCBT_PLAN,
+			DownloadControlStrictOrder.serializePlan( order ));
+		state.setLongAttribute( DownloadManagerState.AT_DLCBT_PLAN_SEED, seed );
+		state.setIntAttribute(
+			DownloadManagerState.AT_DLCBT_PLAN_VER,
+			DownloadControlStrictOrder.PLAN_VERSION );
+	}
+
+	static void
+	clearPlan(
+		DownloadManagerState		state )
+	{
+		if ( state == null ){
+			return;
+		}
+		state.setListAttribute( DownloadManagerState.AT_DLCBT_PLAN, new String[0] );
+		state.setLongAttribute( DownloadManagerState.AT_DLCBT_PLAN_SEED, 0 );
+		state.setIntAttribute( DownloadManagerState.AT_DLCBT_PLAN_VER, 0 );
+	}
+
+	static long
+	newRandomSeed(
+		DownloadManager		dm,
+		int					fileIndex )
+	{
+		long seed = System.nanoTime() ^ ((long)fileIndex * 0x9E3779B97F4A7C15L);
+		try{
+			if ( dm != null && dm.getTorrent() != null ){
+				byte[] hash = dm.getTorrent().getHash();
+				if ( hash != null ){
+					for (int i = 0; i < hash.length && i < 8; i++){
+						seed ^= ((long)(hash[i] & 0xff)) << (8 * (i % 8));
+					}
+				}
+			}
+		}catch( Throwable ignore ){
+		}
+		if ( seed == 0 ){
+			seed = 1L;
+		}
+		return seed;
 	}
 
 	static DownloadControlStrictOrder.HashVerifiedPieces

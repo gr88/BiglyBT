@@ -52,6 +52,9 @@ public class TableHeaderPainted
 {
 	private static final int DEFAULT_HEADER_HEIGHT = 27;
 
+	/** Shared header-divider hit slop, used for both resize and to refuse column-move DND. */
+	private static final int RESIZE_HIT_PX = 5;
+
 	private static boolean gradientHeader;
 	
 	static{
@@ -447,6 +450,25 @@ public class TableHeaderPainted
 		cHeaderArea.setMenu(menu);
 	}
 
+	static boolean
+	isColumnBoundaryHit(
+		int					mouseX,
+		int					clientAreaX,
+		TableColumnCore[]	visibleColumns )
+	{
+		if ( visibleColumns == null ){
+			return false;
+		}
+		int x = -clientAreaX;
+		for ( TableColumnCore column: visibleColumns ){
+			x += column.getWidth();
+			if ( mouseX >= x - RESIZE_HIT_PX && mouseX <= x + RESIZE_HIT_PX ){
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static class MouseListeners
 		implements Listener
 	{
@@ -532,7 +554,7 @@ public class TableHeaderPainted
 						int w = column.getWidth();
 						x += w;
 
-						if (e.x >= x - 3 && e.x <= x + 3) {
+						if (e.x >= x - RESIZE_HIT_PX && e.x <= x + RESIZE_HIT_PX) {
 							columnSizing = column;
 							columnSizingStart = e.x;
 							break;
@@ -593,7 +615,7 @@ public class TableHeaderPainted
 							int w = column.getWidth();
 							x += w;
 
-							if (e.x >= x - 3 && e.x <= x + 3) {
+							if (e.x >= x - RESIZE_HIT_PX && e.x <= x + RESIZE_HIT_PX) {
 								cursorID = SWT.CURSOR_SIZEWE;
 								break;
 							}
@@ -761,9 +783,12 @@ public class TableHeaderPainted
 			if (cHeaderArea.isDisposed() || event.display == null) {
 				return;
 			}
-			Cursor cursor = cHeaderArea.getCursor();
-			if (cursor != null
-					&& cursor.equals(event.display.getSystemCursor(SWT.CURSOR_SIZEWE))) {
+			// Decide resize vs move from the same boundary hit-test used by
+			// MouseDown, not from cursor-object identity (GTK can return a
+			// cursor that is not == the system SIZEWE instance).
+			Rectangle clientArea = tv.getClientArea();
+			int clientAreaX = clientArea == null ? 0 : clientArea.x;
+			if (isColumnBoundaryHit(event.x, clientAreaX, tv.getVisibleColumns())) {
 				event.doit = false;
 				return;
 			}
