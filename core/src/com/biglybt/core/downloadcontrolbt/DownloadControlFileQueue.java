@@ -246,6 +246,34 @@ public final class DownloadControlFileQueue
 			enabled, storedMode, selectedFileIndex, fileIndex );
 	}
 
+	/**
+	 * Add-dialog letter for a pending file: S/R from a stored override,
+	 * R for every unskipped nonempty file when auto queue is on (default
+	 * Random), blank when Off, skipped, or empty. Mirrors
+	 * {@link #modeLetterForFile} for not-yet-added torrents.
+	 */
+	public static String
+	modeLetterForPendingFile(
+		boolean		explicitOff,
+		boolean		autoQueue,
+		int			fileOverrideMode,
+		boolean		skippedOrEmpty )
+	{
+		if ( explicitOff || skippedOrEmpty ){
+			return "";
+		}
+		if ( fileOverrideMode == DownloadControlStrictOrder.MODE_SEQUENTIAL ){
+			return "S";
+		}
+		if ( fileOverrideMode == DownloadControlStrictOrder.MODE_RANDOM ){
+			return "R";
+		}
+		if ( autoQueue ){
+			return DownloadControlStrictOrder.modeLetter( DownloadControlStrictOrder.MODE_RANDOM );
+		}
+		return "";
+	}
+
 	public static Map<Integer, Integer>
 	parseFileModes(
 		String[]		stored )

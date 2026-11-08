@@ -211,6 +211,23 @@ public class DownloadControlFileQueueTest
 	}
 
 	@Test
+	public void pendingLettersMatchAddDialogOverridesAndSkip()
+	{
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			true, true, DownloadControlStrictOrder.MODE_SEQUENTIAL, false )).isEmpty();
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			false, true, DownloadControlStrictOrder.MODE_OFF, true )).isEmpty();
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			false, false, DownloadControlStrictOrder.MODE_OFF, false )).isEmpty();
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			false, true, DownloadControlStrictOrder.MODE_OFF, false )).isEqualTo( "R" );
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			false, true, DownloadControlStrictOrder.MODE_SEQUENTIAL, false )).isEqualTo( "S" );
+		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
+			false, false, DownloadControlStrictOrder.MODE_RANDOM, false )).isEqualTo( "R" );
+	}
+
+	@Test
 	public void newTorrentDefaultsRespectOffLegacyManualAndMagnet()
 	{
 		DownloadControlFileQueue.FileSnap[] files = {

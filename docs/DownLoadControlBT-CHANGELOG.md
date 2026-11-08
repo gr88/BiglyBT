@@ -35,7 +35,43 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## 2026-11-07 — Focused UI and restart bug-fix increment
+
+Source and unit tests live on branch `DownLoadControlBT`. Isolated Linux
+test archives use an America/Chicago `YYYYMMDDHHMM` version in the
+archive name, extracted directory, and `version.txt`. Older prereleases
+are retained. Existing isolated `data/` from a previous package of this
+series stays usable: copy the old `data` directory beside a fresh
+extract, or keep using the same extracted tree after replacing the jars
+and scripts. Do not copy `~/.biglybt` into the package.
+
+This increment was **not** GUI-tested in a live desktop session. Fixes
+below are labeled as source-fixed, source-mitigated, or unresolved.
+No test torrent was placed on the public network. No block-level
+control was added. Force Piece still cannot bypass the experimental
+allowed-head gate (`getAllowedPieceNumber` is unchanged).
+
+### Status
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| Wrong-row first right-click (Files tab and add-dialog) | Source-fixed; not GUI-verified | MenuDetect now hit-tests with the event's display coordinates converted via `toControl`, not `getCursorLocation()`. Keyboard menus keep the focused row. Multi-selection is preserved when the pointer is already inside it. `clientArea.y` is added once. Profile-only diagnostic lines log display/control/content Y, hit row, and current selection. |
+| DLC column on Open Torrent Options | Source-fixed; not GUI-verified | New `DLC` column shows S/R/blank from pending Off, Auto queue, per-file overrides, and skip/empty. Refreshes after the file menu changes. Existing Files-tab letters are unchanged. Auto-queue tooltip states that selected files download strictly one at a time. Sequential/Random stay single-file; the menu explains why they are disabled for multi-select, skipped, or empty files. |
+| Gray expandable add-dialog sections default expanded | Source-fixed; not GUI-verified | Skin defaults all sections expanded. Isolated `InitIsolatedConfig` applies a one-shot `dlcbt.opentorrent.sections.expanded.v1` write so testers who inherited the old saved-collapsed false get the new default once; later collapses persist. |
+| Pieces-graphic tiny empty menu | Source-mitigated; not GUI-verified | Upstream already has Force Piece and Reset Piece. The builder no longer returns a zero-item menu: it recovers the piece from the cursor if MenuDetect has not stored one yet (GTK show-before-detect) and otherwise shows a disabled reason item. Force Piece still only sets the picker flag; it does not enlarge the DLCBT allowed head. |
+| Column-width drag starts a column move | Source-mitigated; not GUI-verified | Move DND is cancelled if MouseDown already started a resize, or if the last control-relative mouse X *or* the drag event X hits a divider (same 5px slop). Hit-test math is unit-tested. Not visually confirmed. |
+| GTK tracker/peer/network checkbox orange, no checkmark | Source-mitigated; not GUI-verified | Add-dialog peer/network groups stop inheriting the dialog's forced white background on Linux. After leaving GTK's inconsistent (grayed) state the selection is rewritten so the native glyph can recover. Stored network and peer-source defaults are unchanged. Not a theme patch. |
+| File > Restart exits and does not relaunch | Source-fixed; subprocess-tested | The restarter no longer pipes the child to the dying JVM (`sleep 2; exec` + inherited stdout). It waits for the parent pid (up to 10s) and appends child stdout/stderr to `data/logs/restart-child.log`. The launcher also ignores SIGPIPE and retries a live pid-file or port 26980 before refusing. A dummy-script unit test checks that a marker is written after the watched pid exits, without a hung or leaked child. File > Exit shutdown-hook guard is unchanged. |
+
+### Tests
+
+Unit tests: 55 run, 0 failed (previously 47). Added 8: pending-file
+letters (1), pointer/menu/column-hit helpers (5), detached restart
+transport (2). Retained FileQueue (13+1), Eligibility (12), Strict (12),
+and Random (10).
+
 ## Next increment — isolated file queue, profile defaults, Force Start add-mode
+
 
 Source and unit tests live on branch `DownLoadControlBT`. Isolated Linux
 test archives use an America/Chicago `YYYYMMDDHHMM` version in the

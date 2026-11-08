@@ -71,18 +71,14 @@ public class DownloadControlBTRestarter
 		}
 
 		try{
-			ProcessBuilder pb = new ProcessBuilder(
-				"bash", "-c", "sleep 2; exec \"$1\"",
-				"dlcbt-restart",
-				script.getAbsolutePath());
-			if ( script.getParentFile() != null ){
-				pb.directory( script.getParentFile());
-			}
-			pb.redirectErrorStream( true );
-			pb.start();
+			File childLog = resolveRestartChildLog( script );
+			long parentPid = currentPid();
+			DownloadControlBTRestartTransport.startLauncher( script, childLog, parentPid );
 			if ( Logger.isEnabled()){
 				Logger.log(new LogEvent(LOGID,
-					"DownLoadControlBT: spawned isolated restart via " + script.getAbsolutePath()));
+					"DownLoadControlBT: spawned isolated restart via " + script.getAbsolutePath()
+						+ " parentPid=" + parentPid
+						+ " childLog=" + childLog.getAbsolutePath()));
 			}
 		}catch( Throwable t ){
 			if ( Logger.isEnabled()){
@@ -98,5 +94,32 @@ public class DownloadControlBTRestarter
 		throws CoreException
 	{
 		throw( new CoreException( "isolated DownLoadControlBT package does not apply updates" ));
+	}
+
+	private static long
+	currentPid()
+	{
+		try{
+			String name = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
+			int at = name.indexOf( '@' );
+			if ( at > 0 ){
+				return Long.parseLong( name.substring( 0, at ));
+			}
+		}catch( Throwable ignored ){
+		}
+		return 0L;
+	}
+
+	private static File
+	resolveRestartChildLog(
+		File		script )
+	{
+		File pkg = script.getParentFile();
+		if ( pkg != null ){
+			File logs = new File( new File( pkg, "data" ), "logs" );
+			logs.mkdirs();
+			return new File( logs, "restart-child.log" );
+		}
+		return new File( "restart-child.log" );
 	}
 }

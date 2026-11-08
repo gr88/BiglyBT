@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # DownLoadControlBT isolated launcher. Does not touch ~/.biglybt.
 set -euo pipefail
+# Parent File>Restart used to spawn this script with stdout piped to a
+# JVM that then exited. Ignore SIGPIPE so banner echos cannot kill us
+# before Main starts (the restarter now also redirects to a file).
+trap '' PIPE
 
 INSTANCE_PORT=26980
 LISTEN_PORT=26981
@@ -179,20 +183,43 @@ if [[ $# -gt 0 ]]; then
   die "this launcher does not accept extra arguments (refusing to pass torrents or UI commands that BiglyBT might auto-open). Use --help or --init-only."
 fi
 
+wait_for_previous_instance() {
+  local i busy oldpid
+  for i in $(seq 1 50); do
+    busy=0
+    if [[ -f "$PIDFILE" ]]; then
+      oldpid=$(cat "$PIDFILE" || true)
+      if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
+        busy=1
+      fi
+    fi
+    if port_in_use "$INSTANCE_PORT"; then
+      busy=1
+    fi
+    if [[ "$busy" -eq 0 ]]; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
+if ! wait_for_previous_instance; then
+  if [[ -f "$PIDFILE" ]]; then
+    oldpid=$(cat "$PIDFILE" || true)
+    if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
+      die "DownLoadControlBT test instance already running as PID $oldpid (pid file $PIDFILE). Not starting another copy, and not contacting any other BiglyBT process."
+    fi
+  fi
+  if port_in_use "$INSTANCE_PORT"; then
+    die "127.0.0.1:${INSTANCE_PORT} is already in use. Refusing to start so this launcher cannot attach to another process. This dedicated port is not the stock BiglyBT port 6880."
+  fi
+fi
 if [[ -f "$PIDFILE" ]]; then
   oldpid=$(cat "$PIDFILE" || true)
-  if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
-    die "DownLoadControlBT test instance already running as PID $oldpid (pid file $PIDFILE). Not starting another copy, and not contacting any other BiglyBT process."
+  if [[ -z "${oldpid:-}" ]] || ! kill -0 "$oldpid" 2>/dev/null; then
+    rm -f "$PIDFILE"
   fi
-  rm -f "$PIDFILE"
-fi
-
-# If our dedicated control port is already taken, refuse rather than let
-# Main.java fall through to CoreSingleInstanceClient.sendArgs (that path
-# only runs when MULTI_INSTANCE is not true, but we still treat a busy
-# dedicated port as an isolation conflict).
-if port_in_use "$INSTANCE_PORT"; then
-  die "127.0.0.1:${INSTANCE_PORT} is already in use. Refusing to start so this launcher cannot attach to another process. This dedicated port is not the stock BiglyBT port 6880."
 fi
 
 echo "Initializing isolated configuration under $CONFIG_CANON"

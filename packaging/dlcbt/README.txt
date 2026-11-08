@@ -115,9 +115,15 @@ Meaning, from BiglyBT source:
 - azureus.overridelog / overridelogdir force file logging to data/logs.
 - azureus.restart.cmd plus the package-owned restarter allow File >
   Restart without shipping the official updater plugin. The restarter
-  only re-executes this start-dlcbt.sh after a short delay. It does not
-  launch a non-isolated Main and does not apply updater payloads. This
-  path is source-level and was not GUI-clicked in the packaging run.
+  waits for the old JVM pid (not a fixed two-second sleep), then
+  re-executes this start-dlcbt.sh with stdin/stdout/stderr detached
+  from the dying parent. Child banners go to
+  data/logs/restart-child.log so a future failed relaunch has an error
+  log. The launcher also retries a lingering pid-file or port 26980
+  before refusing. It does not launch a non-isolated Main and does not
+  apply updater payloads. The spawn transport is covered by a dummy
+  subprocess unit test; File > Restart itself was not GUI-clicked in
+  the packaging run.
 
 If 127.0.0.1:26980 is already in use, or this package's pid file still
 points at a live process, the launcher refuses to start. It does not try
@@ -128,7 +134,8 @@ Isolated paths (all owned by this package)
     data/config/       isolated BiglyBT settings (biglybt.config)
     data/downloads/    default save path for downloaded files
     data/torrents/     saved .torrent copies created by this instance
-    data/logs/         biglybt.log (also used via azureus.overridelogdir)
+    data/logs/         biglybt.log (also used via azureus.overridelogdir);
+                      restart-child.log for File > Restart child output
     data/dlcbt.pid     live process id while the client is running
 
 First-run isolated settings also set TCP/UDP listen ports to 26981 so this

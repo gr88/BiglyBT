@@ -46,6 +46,7 @@ import com.biglybt.core.download.DownloadManager;
 import com.biglybt.core.download.DownloadManagerListener;
 import com.biglybt.core.download.DownloadManagerState;
 import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.TablePointerHit;
 import com.biglybt.core.download.impl.DownloadManagerAdapter;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.peer.PEPeerManager;
@@ -374,6 +375,10 @@ public class FilesViewMenuUtil
 			boolean dlc_single = all_files.size() == 1;
 			DiskManagerFileInfo dlc_file = dlc_single ? first : null;
 			boolean dlc_usable = dlc_file != null && dlc_file.getLength() > 0 && !dlc_file.isSkipped();
+			String dlc_disable = TablePointerHit.modeOverrideDisableReason(
+				!dlc_single,
+				dlc_file != null && dlc_file.isSkipped(),
+				dlc_file != null && dlc_file.getLength() <= 0 );
 			int dlc_policy = DownloadControlBT.getPolicy( dlc_dm );
 			boolean dlc_off = dlc_policy == DownloadControlBT.POLICY_OFF || !DownloadControlBT.isEnabled( dlc_dm );
 			int dlc_file_mode = DownloadControlBT.MODE_OFF;
@@ -410,6 +415,12 @@ public class FilesViewMenuUtil
 				MessageText.getString( "menu.downloadcontrolbt.sequential.tooltip" ));
 			itemDLCSequential.setSelection( dlc_file_mode == DownloadControlBT.MODE_SEQUENTIAL );
 			itemDLCSequential.setEnabled( dlc_usable );
+			if ( dlc_disable != null ){
+				itemDLCSequential.setToolTipText( MessageText.getString(
+					"menu.downloadcontrolbt.mode.disabled." + (
+						TablePointerHit.DISABLE_MULTI.equals( dlc_disable ) ? "multiselect" :
+						TablePointerHit.DISABLE_SKIPPED.equals( dlc_disable ) ? "skipped" : "empty" )));
+			}
 			itemDLCSequential.addListener( SWT.Selection, event -> {
 				if ( itemDLCSequential.getSelection() && dlc_file != null ){
 					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
@@ -422,6 +433,12 @@ public class FilesViewMenuUtil
 				MessageText.getString( "menu.downloadcontrolbt.random.tooltip" ));
 			itemDLCRandom.setSelection( dlc_file_mode == DownloadControlBT.MODE_RANDOM );
 			itemDLCRandom.setEnabled( dlc_usable );
+			if ( dlc_disable != null ){
+				itemDLCRandom.setToolTipText( MessageText.getString(
+					"menu.downloadcontrolbt.mode.disabled." + (
+						TablePointerHit.DISABLE_MULTI.equals( dlc_disable ) ? "multiselect" :
+						TablePointerHit.DISABLE_SKIPPED.equals( dlc_disable ) ? "skipped" : "empty" )));
+			}
 			itemDLCRandom.addListener( SWT.Selection, event -> {
 				if ( itemDLCRandom.getSelection() && dlc_file != null ){
 					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_RANDOM );

@@ -85,6 +85,28 @@ public final class InitIsolatedConfig
 		setIfUnset("LibraryUnopened.viewmode", 1);
 		setIfUnset("Library.ShowTabsInTorrentView", 1);
 
+		// One-shot: expand all Open Torrent Options sections on a fresh
+		// isolated profile (and once for testers who inherited the previous
+		// collapsed-by-default saved false). Later user collapses persist.
+		if (!COConfigurationManager.hasParameter("dlcbt.opentorrent.sections.expanded.v1", true)) {
+			String[] expandKeys = {
+				"ui.skin.toptions2.torrentinfo.expanded",
+				"ui.skin.toptions2.filearea.expanded",
+				"ui.skin.toptions2.saveto.expanded",
+				"ui.skin.toptions2.start.expanded",
+				"ui.skin.toptions2.peer.expanded",
+				"ui.skin.toptions.torrentinfo.expanded",
+				"ui.skin.toptions.filearea.expanded",
+				"ui.skin.toptions.saveto.expanded",
+				"ui.skin.toptions.start.expanded",
+				"ui.skin.toptions.peer.expanded"
+			};
+			for (int i = 0; i < expandKeys.length; i++) {
+				COConfigurationManager.setParameter(expandKeys[i], true);
+			}
+			COConfigurationManager.setParameter("dlcbt.opentorrent.sections.expanded.v1", true);
+		}
+
 		@SuppressWarnings("rawtypes")
 		List existingSchedule = COConfigurationManager.getListParameter(
 			DownloadControlBTDefaults.CFG_SCHEDULE_LINES, new ArrayList());

@@ -237,6 +237,16 @@ public class BooleanSwtParameter
 			}
 		}
 		setMainControl(checkBox);
+		if ( Constants.isLinux && checkBox != null && !checkBox.isDisposed()){
+			// INHERIT_FORCE white backgrounds (add-dialog expand body) leave GTK
+			// check buttons with an outline and no check glyph. Clearing the
+			// inherited background lets the native checkbox draw its indicator
+			// without changing stored boolean or network defaults.
+			try{
+				checkBox.setBackground( null );
+			}catch( Throwable ignored ){
+			}
+		}
 
 		if (suffixLabelKey != null) {
 			lblSuffix = new Label(ourParent, SWT.WRAP);
@@ -388,6 +398,7 @@ public class BooleanSwtParameter
 			refreshSuffixControl(lblSuffix);
 
 			Boolean selected = getValue();
+			boolean wasGrayed = checkBox.getGrayed();
 			if (selected == null) {
 				checkBox.setGrayed(true);
 				checkBox.setSelection(true);
@@ -395,6 +406,12 @@ public class BooleanSwtParameter
 				checkBox.setGrayed(false);
 				if (checkBox.getSelection() != selected) {
 					checkBox.setSelection(selected);
+				}
+				// GTK can keep the inconsistent (orange) indicator after
+				// setGrayed(false) unless selection is rewritten.
+				if ( Constants.isLinux && wasGrayed ){
+					checkBox.setSelection( !selected );
+					checkBox.setSelection( selected );
 				}
 			}
 		});
