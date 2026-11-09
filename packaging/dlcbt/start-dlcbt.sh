@@ -109,15 +109,23 @@ fi
 # Default compact SWT scaling. Preserve any existing JAVA_TOOL_OPTIONS.
 # --no-compact skips the default; an already-present -Dswt.autoScale=* is left alone.
 DLC_COMPACT=1
+DLC_SWT_JAR="$PACKAGE_ROOT/swt.jar"
 LAUNCH_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --compact) DLC_COMPACT=1 ;;
     --no-compact) DLC_COMPACT=0 ;;
+    --legacy-swt) export DLCBT_LEGACY_SWT=1 ;;
     *) LAUNCH_ARGS+=("$arg") ;;
   esac
 done
 set -- "${LAUNCH_ARGS[@]+"${LAUNCH_ARGS[@]}"}"
+
+# --legacy-swt (or DLCBT_LEGACY_SWT=1, inherited by in-app restarts) uses
+# the previously bundled SWT 4.922 instead of the default 4.968.
+if [[ "${DLCBT_LEGACY_SWT:-0}" == "1" ]]; then
+  DLC_SWT_JAR="$PACKAGE_ROOT/swt-legacy-4922.jar"
+fi
 
 if [[ "$DLC_COMPACT" == "1" ]]; then
   case " ${JAVA_TOOL_OPTIONS:-} " in
@@ -129,7 +137,7 @@ fi
 java_ver=$("$JAVA_CMD" -version 2>&1 | head -n 1)
 echo "Using $JAVA_CMD ($java_ver)"
 
-for j in "$PACKAGE_ROOT/BiglyBT.jar" "$PACKAGE_ROOT/swt.jar" "$PACKAGE_ROOT/commons-cli.jar"; do
+for j in "$PACKAGE_ROOT/BiglyBT.jar" "$DLC_SWT_JAR" "$PACKAGE_ROOT/commons-cli.jar"; do
   [[ -f "$j" ]] || die "missing runtime jar: $j"
 done
 
@@ -152,7 +160,8 @@ COMMON_JAVA_OPTS=(
   -Daz.factory.ClientRestarter.impl=com.biglybt.core.downloadcontrolbt.DownloadControlBTRestarter
 )
 
-CP="$PACKAGE_ROOT/BiglyBT.jar:$PACKAGE_ROOT/swt.jar:$PACKAGE_ROOT/commons-cli.jar"
+echo "SWT jar: $(basename "$DLC_SWT_JAR")"
+CP="$PACKAGE_ROOT/BiglyBT.jar:$DLC_SWT_JAR:$PACKAGE_ROOT/commons-cli.jar"
 
 run_init() {
   "$JAVA_CMD" \

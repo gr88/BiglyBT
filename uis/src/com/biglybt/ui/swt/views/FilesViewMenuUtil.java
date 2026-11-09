@@ -374,10 +374,11 @@ public class FilesViewMenuUtil
 			DownloadManager dlc_dm = first.getDownloadManager();
 			boolean dlc_single = all_files.size() == 1;
 			DiskManagerFileInfo dlc_file = dlc_single ? first : null;
-			boolean dlc_usable = dlc_file != null && dlc_file.getLength() > 0 && !dlc_file.isSkipped();
+			// S / R on an unchecked file also checks it for download
+			boolean dlc_usable = dlc_file != null && dlc_file.getLength() > 0;
 			String dlc_disable = TablePointerHit.modeOverrideDisableReason(
 				!dlc_single,
-				dlc_file != null && dlc_file.isSkipped(),
+				false,
 				dlc_file != null && dlc_file.getLength() <= 0 );
 			int dlc_policy = DownloadControlBT.getPolicy( dlc_dm );
 			boolean dlc_off = dlc_policy == DownloadControlBT.POLICY_OFF || !DownloadControlBT.isEnabled( dlc_dm );
@@ -423,7 +424,7 @@ public class FilesViewMenuUtil
 			}
 			itemDLCSequential.addListener( SWT.Selection, event -> {
 				if ( itemDLCSequential.getSelection() && dlc_file != null ){
-					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
+					DownloadControlBT.chooseFileMode( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
 				}
 			});
 
@@ -441,18 +442,12 @@ public class FilesViewMenuUtil
 			}
 			itemDLCRandom.addListener( SWT.Selection, event -> {
 				if ( itemDLCRandom.getSelection() && dlc_file != null ){
-					DownloadControlBT.enableForFile( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_RANDOM );
+					DownloadControlBT.chooseFileMode( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_RANDOM );
 				}
 			});
 
-			final MenuItem itemDLCAuto = new MenuItem(menuDLC, SWT.CHECK);
-			Messages.setLanguageText(itemDLCAuto, "menu.downloadcontrolbt.autoqueue");
-			itemDLCAuto.setToolTipText(
-				MessageText.getString( "menu.downloadcontrolbt.autoqueue.tooltip" ));
-			itemDLCAuto.setSelection( dlc_policy == DownloadControlBT.POLICY_AUTO );
-			itemDLCAuto.addListener( SWT.Selection, event -> {
-				DownloadControlBT.setAutoQueueEnabled( dlc_dm, itemDLCAuto.getSelection());
-			});
+			// "Auto file queue" switch removed: the strict one-file-at-a-time
+			// priority queue is always the engine when DLCBT is on.
 		}
 
 		if ( all_files.size() == 1 ){

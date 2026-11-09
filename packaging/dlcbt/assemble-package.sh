@@ -40,7 +40,10 @@ rm -rf "$STAGE"
 mkdir -p "$DEST/data/config" "$DEST/data/downloads" "$DEST/data/torrents" "$DEST/data/logs" "$DEST/tools" "$OUTDIR"
 
 install -m 644 "$SRC_ROOT/uis/target/BiglyBT.jar" "$DEST/BiglyBT.jar"
-install -m 644 "$SRC_ROOT/uis/lib/swt-linux-64.jar" "$DEST/swt.jar"
+# Default SWT is upstream's current Linux jar (4.968, class files need Java 17+).
+# The previously bundled 4.922 stays as a fallback: start-dlcbt.sh --legacy-swt
+install -m 644 "$SRC_ROOT/uis/lib/swt-linux-4968r13.jar" "$DEST/swt.jar"
+install -m 644 "$SRC_ROOT/uis/lib/swt-linux-64.jar" "$DEST/swt-legacy-4922.jar"
 install -m 644 "$SRC_ROOT/core/lib/commons-cli.jar" "$DEST/commons-cli.jar"
 install -m 644 "$SRC_ROOT/LICENSE" "$DEST/LICENSE"
 printf '%s\n' "$STAMP" > "$DEST/version.txt"
@@ -69,7 +72,8 @@ pull_request=https://github.com/gr88/BiglyBT/pull/1
 package_version=$STAMP
 package_version_zone=America/Chicago
 architecture=linux-x86_64
-swt=uis/lib/swt-linux-64.jar renamed to swt.jar
+swt=uis/lib/swt-linux-4968r13.jar renamed to swt.jar
+swt_legacy=uis/lib/swt-linux-64.jar renamed to swt-legacy-4922.jar (start-dlcbt.sh --legacy-swt)
 main_class=com.biglybt.ui.Main
 SOURCENOTE
 
@@ -78,7 +82,7 @@ javac --release 8 -cp "$DEST/BiglyBT.jar:$DEST/commons-cli.jar" \
 
 {
   echo "packaged_files_sha256:"
-  hashed=(BiglyBT.jar swt.jar commons-cli.jar start-dlcbt.sh stop-dlcbt.sh README.txt LICENSE version.txt SOURCE.txt tools/InitIsolatedConfig.class)
+  hashed=(BiglyBT.jar swt.jar swt-legacy-4922.jar commons-cli.jar start-dlcbt.sh stop-dlcbt.sh README.txt LICENSE version.txt SOURCE.txt tools/InitIsolatedConfig.class)
   if [[ -f "$DEST/DownLoadControlBT-CHANGELOG.md" ]]; then
     hashed+=(DownLoadControlBT-CHANGELOG.md)
   fi

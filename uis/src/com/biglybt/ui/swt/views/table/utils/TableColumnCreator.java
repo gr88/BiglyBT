@@ -41,6 +41,7 @@ import com.biglybt.ui.swt.views.tableitems.mytorrents.*;
 import com.biglybt.ui.common.table.TableColumnCore;
 import com.biglybt.ui.common.table.TableColumnCoreCreationListener;
 import com.biglybt.ui.common.table.impl.TableColumnManager;
+import com.biglybt.ui.swt.views.tableitems.mytorrents.DLCTorrentModeItem;
 
 /**
  * @author TuxPaper
@@ -56,6 +57,7 @@ public class TableColumnCreator
 			HealthItem.COLUMN_ID,
 			RankItem.COLUMN_ID,
 			NameItem.COLUMN_ID,
+			DLCTorrentModeItem.COLUMN_ID,
 			"TorrentStream",
 			"azsubs.ui.column.subs",
 			"azbuddy.ui.column.msgpending",
@@ -95,6 +97,8 @@ public class TableColumnCreator
 		} else if (DownloadControlBT.isProfileEnabled()) {
 			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
+
+		DownloadControlBTLibraryColumns.applyOnce(mapTCs, DownloadTypeIncomplete.class, tableID, true);
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
@@ -142,6 +146,8 @@ public class TableColumnCreator
 		} else if (DownloadControlBT.isProfileEnabled()) {
 			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
+
+		DownloadControlBTLibraryColumns.applyOnce(mapTCs, DownloadTypeComplete.class, tableID, false);
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
@@ -193,6 +199,8 @@ public class TableColumnCreator
 		} else if (DownloadControlBT.isProfileEnabled()) {
 			maybeHideDefaultLibraryColumns(mapTCs, stockVisibleOrder, defaultVisibleOrder);
 		}
+
+		DownloadControlBTLibraryColumns.applyOnce(mapTCs, Download.class, tableID, false);
 
 		return (TableColumnCore[]) mapTCs.values().toArray(new TableColumnCore[0]);
 	}
@@ -256,6 +264,7 @@ public class TableColumnCreator
 		final Class tc = TableColumn.class;
 
 		c.put(RankItem.COLUMN_ID, new cInfo(RankItem.class, RankItem.DATASOURCE_TYPE));
+		c.put(DLCTorrentModeItem.COLUMN_ID, new cInfo(DLCTorrentModeItem.class, DLCTorrentModeItem.DATASOURCE_TYPE));
 		c.put(NameItem.COLUMN_ID, new cInfo(NameItem.class, NameItem.DATASOURCE_TYPE));
 		c.put(SizeItem.COLUMN_ID, new cInfo(SizeItem.class, SizeItem.DATASOURCE_TYPE));
 		c.put(ColumnSizeWithDND.COLUMN_ID, new cInfo(ColumnSizeWithDND.class, ColumnSizeWithDND.DATASOURCE_TYPE));

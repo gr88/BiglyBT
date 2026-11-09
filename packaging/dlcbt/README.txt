@@ -20,7 +20,9 @@ Source
 - Upstream version: BiglyBT 4.1.0.1 Beta B07 (4.1.0.1_B07)
 - Upstream base commit: 0e68b708357a86debe1423df05740f6f184fd690
 - Architecture: Linux x86_64 (amd64) only
-- SWT natives: GTK x86_64 from swt-linux-64.jar (ELF64 EM_X86_64)
+- SWT natives: GTK x86_64. swt.jar is upstream's current Linux SWT 4.968
+  (uis/lib/swt-linux-4968r13.jar, needs Java 17+). The previously bundled
+  SWT 4.922 is kept as swt-legacy-4922.jar (use --legacy-swt)
 - Runtime jars were built with Temurin 17 from the source commit above
 
 The SHA256 of the .tar.gz that contains this folder is recorded next to the
@@ -39,7 +41,8 @@ What this package will not do
 - Isolated first-run defaults (only when a setting is missing or a
   speed schedule is empty) enable the DownLoadControlBT profile: new
   torrents added through the always-shown Open Torrent Options dialog
-  default to Force Started and auto file queue with Random interiors.
+  default to Force Started and the strict one-file-at-a-time queue with
+  Random interiors (there is no separate Auto file queue switch).
   Off in that dialog disables all experimental gates. Regular ~/.biglybt
   is never written. I2P/Tor network checkboxes default on here; this
   package does not install I2P or Tor plugins and does not provide
@@ -75,6 +78,9 @@ Optional:
     ./start-dlcbt.sh --help         # BiglyBT CLI help, then exit
     ./start-dlcbt.sh --no-compact   # do not add default -Dswt.autoScale=100
     ./start-dlcbt.sh --compact      # keep the default compact SWT scale
+    ./start-dlcbt.sh --legacy-swt   # use the older bundled SWT 4.922
+                                    # (also DLCBT_LEGACY_SWT=1; kept for
+                                    # File > Restart)
     ./stop-dlcbt.sh                 # stop only this package's recorded PID
 
 If JAVA_HOME points at a JRE/JDK that contains bin/java, that binary is
@@ -128,6 +134,43 @@ Meaning, from BiglyBT source:
 If 127.0.0.1:26980 is already in use, or this package's pid file still
 points at a live process, the launcher refuses to start. It does not try
 to talk to port 6880 and it does not kill other processes.
+
+Temporary peer bans (DownLoadControlBT profile only)
+----------------------------------------------------
+Separate from BiglyBT's own IP filter / bad-data bans: in memory only (a
+restart clears them), never written to the 7-day ban file, and never
+widened to a /24 or /64. Each ban lasts a random 54-64 whole minutes and
+applies to every torrent in this isolated client: incoming and outgoing
+connections from that exact address are refused and any connected peer
+with that address is closed on all torrents.
+
+- Address: exact IPv4 (/32) or exact IPv6 (/128). IPv4-mapped IPv6
+  (::ffff:a.b.c.d) counts as the IPv4 address. Loopback, LAN, I2P/Tor,
+  web seeds and plugin peers are never speed-banned.
+- Speed: after 60 s of active sending, the peer's incoming payload
+  average over 30 s of active sending must be at least 10k (10 KiB/s)
+  and at most the speed schedule's per-peer peer_down (251.1k by
+  default). Active sending means it has unchoked us and we have
+  outstanding requests to it. Idle time, choked time, DLCBT one-piece
+  gate waits and hash-check waits pause the clock instead of counting
+  as zero. Time while a torrent or global download limit is set is not
+  measured (a cap could push every peer under 10k).
+- Duplicates: the 3rd rejected incoming duplicate connection from the
+  same address on the same torrent within 60 s bans it. Different
+  torrents do not add up; outgoing dials are never counted.
+- Log lines start with "DLCBT temporary ban reason=" in data/logs.
+- Settings (biglybt.config, seeded only when missing):
+  dlcbt.ban.enabled=true, dlcbt.ban.duration.min.minutes=54,
+  dlcbt.ban.duration.max.minutes=64, dlcbt.ban.speed.min=10k,
+  dlcbt.ban.speed.max= (blank = follow peer_down), dlcbt.ban.ramp.seconds=60,
+  dlcbt.ban.window.seconds=30, dlcbt.ban.duplicate.window.seconds=60,
+  dlcbt.ban.duplicate.threshold=3. Set dlcbt.ban.enabled=false in BiglyBT's
+  advanced (raw) config view to turn bans off.
+  Restarting the client clears all current DLCBT bans.
+
+Upload: this build sets overall/session upload to unlimited once
+(dlcbt.upload.unlimited.v1). The per-peer schedule (peer_up=25.1k per
+peer) is unchanged. Later changes you make are kept.
 
 Isolated paths (all owned by this package)
 ------------------------------------------

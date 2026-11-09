@@ -274,6 +274,42 @@ public final class DownloadControlFileQueue
 		return "";
 	}
 
+	/**
+	 * Library-column text for a torrent: blank when off, S or R when every
+	 * contributing file letter agrees, otherwise Mixed.
+	 */
+	public static String
+	torrentModeDisplay(
+		boolean					enabled,
+		int						policy,
+		java.util.Collection<String>	fileLetters )
+	{
+		if ( !enabled || policy == POLICY_OFF ){
+			return "";
+		}
+		boolean seenS = false;
+		boolean seenR = false;
+		if ( fileLetters != null ){
+			for ( String letter: fileLetters ){
+				if ( "S".equals( letter )){
+					seenS = true;
+				}else if ( "R".equals( letter )){
+					seenR = true;
+				}
+			}
+		}
+		if ( seenS && seenR ){
+			return "Mixed";
+		}
+		if ( seenS ){
+			return "S";
+		}
+		if ( seenR ){
+			return "R";
+		}
+		return "";
+	}
+
 	public static Map<Integer, Integer>
 	parseFileModes(
 		String[]		stored )

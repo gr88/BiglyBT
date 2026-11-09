@@ -28,12 +28,34 @@ not skip ahead. Tiny 1-piece and 2-piece files use the same first/last
 rules (a single piece appears once; a two-piece file is first then last
 with no interiors).
 
-This phase does **not** implement peer bans, speed policy, short retry
-timers, or queue demotion.
+The original phase did not implement peer bans or speed policy; the
+2026-11-09 increment below adds DLCBT-only temporary bans. Short retry
+timers and queue demotion are still not implemented.
 
 Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
+
+## 2026-11-09 — Temporary bans, queue switch removal, Library DLC column
+
+Not GUI-tested in a live desktop session and not tested against live
+peers. Unit tests and static/runtime SWT checks only, as listed.
+
+| Item | Status | Notes |
+| --- | --- | --- |
+| DLCBT temporary bans (speed + duplicate) | Source + unit tests; not live-verified | Separate in-memory registry (no IPBanner /24 cascade, nothing persisted). Random 54–64 min. Exact /32 or /128, mapped IPv6 → IPv4. Hooks: `PeerManager.route` (incoming reject + duplicate count), `PEPeerControlImpl.makeNewOutgoingConnection` (outgoing reject), `isBlocked` (peer add / handshake path), ban listener closes matching peers on all running torrents. Speed sampler runs once a second per transferring peer; idle/choked/no-outstanding-request/gate/hash-wait time pauses rather than resets (stale after 5 min). Min 10k, max from `peer_down` in the schedule unless `dlcbt.ban.speed.max` is set. Not measured while a torrent/global download cap is set. Duplicate rule counts only incoming rejects with a live same-address peer on the same torrent: 3 within 60 s. |
+| Auto file queue switch removed | Source-fixed | Removed from Files view and Open Torrent Options. The strict one-file-at-a-time priority engine is always used; stored Manual policy is lifted to the queue keeping the previous file + mode as an override. |
+| S/R on an unchecked file | Source-fixed; not GUI-verified | Choosing S or R also checks the file for download (Files view and add dialog). Multi-select and empty files stay disabled. |
+| Library DLC column (S / R / Mixed / blank) | Source-fixed; not GUI-verified | `dlcbt.torrent` column, default visible after Name in Incomplete Torrents. |
+| Play Now hidden | Source-fixed for saved layouts; not GUI-verified | One-shot per Library table (`dlcbt.library.columns.v2.<table>`) hides Play Now (`TorrentStream`) and the other DLCBT-hidden columns even in a customised saved layout, then saves. Later re-enables persist. |
+| Open Torrent Options size | Source-fixed; not GUI-verified | One-shot (`dlcbt.otow.size.v1`) 90% of the current monitor's client area, centered. Later resizes are saved normally. File columns auto-fit once ~1.2 s after the torrent's rows load. |
+| Upload unlimited | Source-fixed | One-shot `dlcbt.upload.unlimited.v1` sets Max Upload Speed (and seeding-only) to 0 and auto upload off. Per-peer `peer_up=25.1k` schedule unchanged. |
+| SWT 4.968 default | Mitigation; not GUI-verified on the reporting desktop | Upstream's current `swt-linux-4968r13.jar` is now `swt.jar`; 4.922 kept as `swt-legacy-4922.jar` (`--legacy-swt`). All 1762 SWT member references in `BiglyBT.jar` resolve against both jars; a checkbox/table smoke test renders on Xvfb with both. Intended to help checkbox rendering and the HDMI doubled view; neither is proven fixed. |
+| Column-width drag, Files first right-click jump, choose-torrent dialog top offscreen, doubled view with HDMI | Unresolved | Best effort only this round; see checkpoint. |
+
+Future idea (not in this build): when a piece is fully covered by
+received or requested blocks, that is a good moment to press Rerequest
+Blocks; possibly make it automatic.
 
 ## 2026-11-07 — Focused UI and restart bug-fix increment
 

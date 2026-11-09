@@ -120,6 +120,43 @@ import com.biglybt.pif.ui.tables.TableColumnCreationListener;
 public class OpenTorrentOptionsWindow
 	implements UIUpdatable
 {
+
+		// DLCBT: open at ~90% of the monitor, centered, once per profile
+		// (and once for testers with an older saved size). Later user
+		// resizes are saved by the normal "otow" shell metrics.
+
+	private static final String DLCBT_OTOW_SIZE_FLAG = "dlcbt.otow.size.v1";
+
+	private static void
+	dlcbtApplyDefaultSizeOnce(
+		Shell	shell )
+	{
+		try{
+			if ( shell == null || shell.isDisposed() || !DownloadControlBT.isProfileEnabled()){
+				return;
+			}
+			if ( COConfigurationManager.getBooleanParameter( DLCBT_OTOW_SIZE_FLAG, false )){
+				return;
+			}
+			org.eclipse.swt.widgets.Monitor mon = shell.getMonitor();
+			if ( mon == null ){
+				mon = shell.getDisplay().getPrimaryMonitor();
+			}
+			if ( mon == null ){
+				return;
+			}
+			Rectangle ca = mon.getClientArea();
+			int w = Math.max( 400, ca.width * 9 / 10 );
+			int h = Math.max( 300, ca.height * 9 / 10 );
+			w = Math.min( w, ca.width );
+			h = Math.min( h, ca.height );
+			shell.setBounds( ca.x + ( ca.width - w ) / 2, ca.y + ( ca.height - h ) / 2, w, h );
+			COConfigurationManager.setParameter( DLCBT_OTOW_SIZE_FLAG, true );
+		}catch( Throwable e ){
+			Debug.out( e );
+		}
+	}
+
 	private static final AtomicInteger	window_id_next = new AtomicInteger();
 	
 	private static final Map<HashWrapper,OpenTorrentOptionsWindow>	active_windows = new HashMap<>();
@@ -1144,6 +1181,8 @@ public class OpenTorrentOptionsWindow
 					}
 					
 					dlg.open("otow",false,moveBelow==null?null:moveBelow.getShell());
+
+					dlcbtApplyDefaultSizeOnce( dlg.getShell());
 	
 					if ( separate_dialogs ){
 						
@@ -6626,10 +6665,10 @@ public class OpenTorrentOptionsWindow
 
 					boolean dlc_single = infos.length == 1;
 					int dlc_index = dlc_single ? infos[0].getIndex() : -1;
-					boolean dlc_skipped = dlc_single && !infos[0].isToDownload();
 					boolean dlc_empty = dlc_single && infos[0].getSize() <= 0;
+					// S / R on an unchecked file also checks it for download
 					String dlc_disable = TablePointerHit.modeOverrideDisableReason(
-						!dlc_single, dlc_skipped, dlc_empty );
+						!dlc_single, false, dlc_empty );
 					boolean dlc_usable = dlc_disable == null;
 					int dlc_file_mode = dlc_single ? torrentOptions.getDlcbtFileMode(dlc_index) : 0;
 					boolean dlc_off = torrentOptions.isDlcbtExplicitOff();
@@ -6666,6 +6705,10 @@ public class OpenTorrentOptionsWindow
 						"menu.downloadcontrolbt.sequential.tooltip" ));
 					itemDLCSequential.addListener(SWT.Selection, event -> {
 						if (itemDLCSequential.getSelection() && dlc_usable) {
+							if (!infos[0].isToDownload()) {
+								setToDownload(infos, true);
+							}
+							torrentOptions.setDlcbtAutoQueue(true);
 							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_SEQUENTIAL);
 							refreshDLCFileColumn();
 						}
@@ -6681,20 +6724,17 @@ public class OpenTorrentOptionsWindow
 						"menu.downloadcontrolbt.random.tooltip" ));
 					itemDLCRandom.addListener(SWT.Selection, event -> {
 						if (itemDLCRandom.getSelection() && dlc_usable) {
+							if (!infos[0].isToDownload()) {
+								setToDownload(infos, true);
+							}
+							torrentOptions.setDlcbtAutoQueue(true);
 							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_RANDOM);
 							refreshDLCFileColumn();
 						}
 					});
 
-					final MenuItem itemDLCAuto = new MenuItem(menuDLC, SWT.CHECK);
-					Messages.setLanguageText(itemDLCAuto, "menu.downloadcontrolbt.autoqueue");
-					itemDLCAuto.setToolTipText(
-						MessageText.getString("menu.downloadcontrolbt.autoqueue.tooltip"));
-					itemDLCAuto.setSelection(torrentOptions.isDlcbtAutoQueue() && !dlc_off);
-					itemDLCAuto.addListener(SWT.Selection, event -> {
-						torrentOptions.setDlcbtAutoQueue(itemDLCAuto.getSelection());
-						refreshDLCFileColumn();
-					});
+					// "Auto file queue" switch removed: the strict one-file-at-a-time
+					// priority queue is always the engine when DLCBT is on.
 
 					itemNumeric.addListener(SWT.Selection, priorityListener);
 					itemNumericAuto.addListener(SWT.Selection, priorityListener);
@@ -6999,6 +7039,50 @@ public class OpenTorrentOptionsWindow
 			}
 			
 			tvFiles.addDataSources( visible_files.toArray( new TorrentOpenFileOptions[0] ));
+
+			dlcbtScheduleAutofitOnce();
+		}
+
+		private boolean dlcbt_autofit_done;
+
+			// DLCBT: size each visible Files column to its content once,
+			// shortly after the torrent's rows are added. Later manual
+			// resizes are left alone.
+
+		private void
+		dlcbtScheduleAutofitOnce()
+		{
+			if ( dlcbt_autofit_done || !DownloadControlBT.isProfileEnabled()){
+				return;
+			}
+			dlcbt_autofit_done = true;
+			Utils.execSWTThreadLater( 1200, () -> {
+				try{
+					TableViewSWT<TorrentOpenFileOptions> tv = tvFiles;
+					if ( tv == null || tv.isDisposed()){
+						return;
+					}
+					for ( final com.biglybt.ui.common.table.TableColumnCore column: tv.getVisibleColumns()){
+						column.setPreferredWidth( -1 );
+						int done = tv.runForAllRows( new com.biglybt.ui.common.table.TableGroupRowRunner() {
+							@Override
+							public void run( TableRowCore row ){
+								row.fakeRedraw( column.getName());
+							}
+						});
+						int pref = done == 0
+							? Math.max( column.getMinWidth(), column.getPreferredHeaderWidth())
+							: Math.max( column.getPreferredWidth(), column.getPreferredHeaderWidth());
+						if ( pref > 0 ){
+							column.setWidth( pref );
+						}
+					}
+					com.biglybt.ui.common.table.TableStructureEventDispatcher.getInstance(
+						tv.getTableID()).tableStructureChanged( false, null );
+				}catch( Throwable e ){
+					Debug.out( e );
+				}
+			});
 		}
 
 		@Override

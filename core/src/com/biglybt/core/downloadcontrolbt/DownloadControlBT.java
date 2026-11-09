@@ -212,6 +212,49 @@ public final class DownloadControlBT
 		return getPolicy( dm ) == POLICY_AUTO;
 	}
 
+	/**
+	 * The Auto file queue menu switch was removed. Downloads that were left
+	 * in POLICY_MANUAL keep their selected file and mode as a per-file
+	 * override and then join the automatic one-file-at-a-time engine.
+	 * POLICY_OFF is unchanged.
+	 */
+	public static void
+	migrateManualPolicyToAutoQueue(
+		DownloadManager		dm )
+	{
+		if ( dm == null || !isProfileEnabled()){
+			return;
+		}
+		if ( getPolicy( dm ) != POLICY_MANUAL ){
+			return;
+		}
+		setAutoQueueEnabled( dm, true );
+		log( dm,
+			"migrated stored POLICY_MANUAL to auto file queue; retained the previous file mode as an override rather than dropping it" );
+	}
+
+	public static String
+	getTorrentModeDisplay(
+		DownloadManager		dm )
+	{
+		if ( dm == null ){
+			return "";
+		}
+		migrateManualPolicyToAutoQueue( dm );
+		if ( !isEnabled( dm ) || getPolicy( dm ) == POLICY_OFF ){
+			return "";
+		}
+		java.util.List<String> letters = new java.util.ArrayList<>();
+		DiskManagerFileInfo[] files = dm.getDiskManagerFileInfoSet().getFiles();
+		if ( files != null ){
+			for ( DiskManagerFileInfo file: files ){
+				letters.add( getModeLetterForFile( dm, file.getIndex()));
+			}
+		}
+		return DownloadControlFileQueue.torrentModeDisplay(
+			true, getPolicy( dm ), letters );
+	}
+
 	public static int
 	getFileModeOverride(
 		DownloadManager		dm,
@@ -270,6 +313,35 @@ public final class DownloadControlBT
 		}
 
 		return activateFile( dm, fileIndex, mode, POLICY_MANUAL );
+	}
+
+	/**
+	 * Files-view S / R choice with the auto file queue as the only engine:
+	 * an unchecked (skipped) file is checked for download first, the torrent
+	 * is put on the strict one-file-at-a-time priority queue, and the letter
+	 * is stored as that file's override.
+	 */
+	public static boolean
+	chooseFileMode(
+		DownloadManager		dm,
+		int					fileIndex,
+		int					mode )
+	{
+		if ( dm == null || ( mode != MODE_SEQUENTIAL && mode != MODE_RANDOM )){
+			return false;
+		}
+		DiskManagerFileInfo file = getFile( dm, fileIndex );
+		if ( file == null || file.getLength() <= 0 ){
+			return false;
+		}
+		if ( file.isSkipped()){
+			file.setSkipped( false );
+			log( dm, "fileIndex=" + fileIndex + " checked for download by S/R choice" );
+		}
+		if ( getPolicy( dm ) != POLICY_AUTO ){
+			setAutoQueueEnabled( dm, true );
+		}
+		return enableForFile( dm, fileIndex, mode );
 	}
 
 	static boolean
@@ -442,6 +514,10 @@ public final class DownloadControlBT
 	{
 		if ( !isEnabled( dm )){
 			return UNRESTRICTED;
+		}
+
+		if ( allowAdvance ){
+			migrateManualPolicyToAutoQueue( dm );
 		}
 
 		if ( allowAdvance && isAutoQueue( dm )){

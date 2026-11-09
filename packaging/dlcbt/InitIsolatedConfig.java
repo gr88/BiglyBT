@@ -8,7 +8,9 @@ import java.util.List;
 
 import com.biglybt.core.config.COConfigurationManager;
 import com.biglybt.core.config.impl.ConfigurationDefaults;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTBanService;
 import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTRateFormat;
 import com.biglybt.core.util.SystemProperties;
 
 /**
@@ -107,6 +109,30 @@ public final class InitIsolatedConfig
 			COConfigurationManager.setParameter("dlcbt.opentorrent.sections.expanded.v1", true);
 		}
 
+		// DLCBT temporary bans (in-memory only, exact /32 or /128, 54-64 min).
+		// Only seeded when missing so user edits survive.
+		setIfUnset(DownloadControlBTBanService.CFG_ENABLED, true);
+		setIfUnset(DownloadControlBTBanService.CFG_MIN_MINUTES, DownloadControlBTBanService.DEFAULT_MIN_MINUTES);
+		setIfUnset(DownloadControlBTBanService.CFG_MAX_MINUTES, DownloadControlBTBanService.DEFAULT_MAX_MINUTES);
+		setIfUnset(DownloadControlBTBanService.CFG_MIN_RATE, DownloadControlBTRateFormat.DEFAULT_MIN);
+		// blank = follow the schedule's per-peer peer_down limit
+		setIfUnset(DownloadControlBTBanService.CFG_MAX_RATE, "");
+		setIfUnset(DownloadControlBTBanService.CFG_RAMP_SECONDS, DownloadControlBTBanService.DEFAULT_RAMP_SECONDS);
+		setIfUnset(DownloadControlBTBanService.CFG_WINDOW_SECONDS, DownloadControlBTBanService.DEFAULT_WINDOW_SECONDS);
+		setIfUnset(DownloadControlBTBanService.CFG_DUP_WINDOW_SECONDS, DownloadControlBTBanService.DEFAULT_DUP_WINDOW_SECONDS);
+		setIfUnset(DownloadControlBTBanService.CFG_DUP_THRESHOLD, DownloadControlBTBanService.DEFAULT_DUP_THRESHOLD);
+
+		// One-shot: overall/session upload unlimited (per-peer schedule
+		// peer_up stays). Later user changes persist.
+		if (!COConfigurationManager.hasParameter("dlcbt.upload.unlimited.v1", true)) {
+			COConfigurationManager.setParameter("Max Upload Speed KBs", 0);
+			COConfigurationManager.setParameter("Max Upload Speed Seeding KBs", 0);
+			COConfigurationManager.setParameter("enable.seedingonly.upload.rate", false);
+			COConfigurationManager.setParameter("Auto Upload Speed Enabled", false);
+			COConfigurationManager.setParameter("Auto Upload Speed Seeding Enabled", false);
+			COConfigurationManager.setParameter("dlcbt.upload.unlimited.v1", true);
+		}
+
 		@SuppressWarnings("rawtypes")
 		List existingSchedule = COConfigurationManager.getListParameter(
 			DownloadControlBTDefaults.CFG_SCHEDULE_LINES, new ArrayList());
@@ -135,6 +161,8 @@ public final class InitIsolatedConfig
 		System.out.println("network.tor=" + COConfigurationManager.getBooleanParameter("Network Selection Default.Tor", false));
 		System.out.println("library.viewmode=" + COConfigurationManager.getIntParameter("Library.viewmode"));
 		System.out.println("schedule.seeded=" + seededSchedule);
+		System.out.println("dlcbt.ban.enabled=" + COConfigurationManager.getBooleanParameter(DownloadControlBTBanService.CFG_ENABLED, false));
+		System.out.println("upload.max.kbs=" + COConfigurationManager.getIntParameter("Max Upload Speed KBs"));
 		System.out.println("schedule.up=" + DownloadControlBTDefaults.SCHEDULE_UP);
 		System.out.println("schedule.down=" + DownloadControlBTDefaults.SCHEDULE_DOWN);
 	}
