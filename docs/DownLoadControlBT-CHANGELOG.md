@@ -36,6 +36,46 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## 2026-11-10 — Per-peer limits, automatic rerequest, file-priority boundaries
+
+Source changes below are **not GUI-verified on the reporting desktop**.
+No public torrent or live remote peer was used. The disk regression uses
+only generated local data, stopped downloads and isolated profiles.
+
+| Request | Status | Implementation / limits |
+| --- | --- | --- |
+| Stored file S/R on unchecked files | Done, facade tested | Files and Open Torrent Options no longer blank a file's mode merely because it is unchecked. Off/empty still blank. |
+| Priority also checks selected files | Source-fixed | High/Normal/Low/Numeric/Numeric Auto Decreasing check the affected files in Files and Open Torrent Options, even if previously unchecked. Dynamic auto-priority no longer prevents an explicit add-dialog selection. |
+| Remove Library DLC, keep Play Now hidden | Source-fixed | Torrent DLC column unregistered/deleted, including Incomplete. Layout migration v3 hides any old saved DLC column plus Play Now. File DLC columns remain. |
+| HTTP / External Seeds per-peer cap | Source + unit tests | One distinct network limiter per ExternalSeedPeer, bound through ConnectionStub. Uses schedule peer_down (251.1k default), refreshed within ~1s; additional webseed max_speed limits remain respected. No torrent/global cap. HTTP/plugin peers remain excluded from speed bans. Throughput not live-measured. |
+| Automatic Rerequest Blocks | Source + cadence/coverage tests | After request allocation, if every active-piece block is received/written or requested, clear outstanding requested marks immediately, then at most every 2s if fully covered again. Same operation as Pieces > Rerequest Blocks; received bytes are never reset. Stop once all block data has arrived, wait for hash verification. The strict allowed-piece gate remains in place. |
+| Accurate wait logging | Source-fixed | Distinguishes fully covered/requested, all data arrived awaiting write/hash, and actually unavailable/not requestable. |
+| Waiting for Handshake >3s ban | Source + tests | Uses exactly Peers StateItem's CONNECTION_WAITING_FOR_HANDSHAKE=2. Timestamp starts in PEPeerTransportProtocol.init() after the transport connects. CONNECTION_PENDING=0 and CONNECTING=1 are never this trigger. Scheduler checks each loop; same 54–64 min exact-address registry and all-torrent disconnect callbacks. |
+| Higher file priority | Real-facade regression tested | Finish and hash-verify the current piece, then preempt for a strictly higher-priority eligible file. Equal priority does not preempt. Return to unfinished lower-priority files afterwards. |
+| Start from piece, forward sequentially | Real-facade regression tested; UI source-only | Files > Experimental: DownLoadControlBT > Start from this piece and go forward sequentially. Enter a torrent-global, zero-based containing piece number. Persisted per-file start point, true ascending suffix (not first/last/interiors); then next eligible file in priority order. Earlier pieces are left missing until S/R is explicitly chosen again (clears start point) or Off allows normal picking. Shared boundary pieces still include adjacent-file bytes needed to verify the torrent piece. |
+| Add-dialog First/Last piece columns | Source-fixed | Default visible, including one-shot addition to saved layouts. Torrent-global, zero-based numbers, matching Pieces view and the forward action. |
+| Peers non-contiguous multi-select | Best-effort source change | Existing Ctrl+click support retained; Ctrl+Space toggles focused row while preserving other selections. Ctrl+Up/Down moves focus without replacing selection in Peers tables. Not GUI-clicked. |
+| Sources seeds descending default | Source-fixed | Once per profile, sort Sources by Seeds descending; later user sort changes persist. |
+| New file defaults | Init tested | Only when each key is unset: Rename Incomplete Files=true, extension=.incomplete, DefaultDir.AutoSave.AutoRename=false, def.deletetorrent=false. Never rewrite an explicit existing value or later change. |
+| Existing data recheck/resume | Disk integration tested | Four generated fixtures: moved-folder partial/complete files, both plain and .incomplete. Rechecked actual piece hashes and recognized byte counts; repeated after stopping/restarting the core using the same isolated config. Legacy-style DLC attributes retained. This does not claim live peer/network resumption or compatibility with every historical suffix/custom layout. |
+| Doubled window after display/resolution changes | Unresolved, non-blocking | Retain SWT 4.968 default and 4.922 fallback. No speculative scaling/environment hacks added. Reported launch-monitor dependence suggests GTK/SWT multi-monitor scaling; no reproduction on the build box. |
+
+Verification: **164/164 tests**, zero failures/errors/skips in the full
+core + UI Maven package reactor (**90 DLCBT tests**). The disk test runs
+4 scenarios before and 4 after a core restart. UI shade build succeeds.
+The isolated init helper seeds all four new defaults and preserves
+explicit contrary changes on the next init. SWT static linkage resolves
+all 1762 referenced members against the bundled 4.968 jar.
+
+HTTP rate extraction uses the first non-comment `peer_down=` token, as
+the existing ban threshold does; it is not a full interpreter for complex
+conditional/multi-group custom schedules. The current All/251.1k
+schedule is supported without rewriting it.
+
+No per-torrent or global download limits were added. Custom speed
+schedules remain untouched. Existing 90%-size/autofit and isolation
+behaviour remain. PR #1 remains review-only and unmerged.
+
 ## 2026-11-09 — Temporary bans, queue switch removal, Library DLC column
 
 Not GUI-tested in a live desktop session and not tested against live

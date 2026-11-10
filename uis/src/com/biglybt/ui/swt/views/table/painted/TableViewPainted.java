@@ -676,6 +676,17 @@ public class TableViewPainted
 					}
 					return;
 				}
+				// DLCBT Peers: move focus without destroying a non-contiguous
+				// selection, then Ctrl+Space toggles the focused row.
+				if (event.stateMask == SWT.MOD1
+					&& (event.keyCode == SWT.ARROW_UP || event.keyCode == SWT.ARROW_DOWN)
+					&& getDataSourceType() == com.biglybt.pif.peers.Peer.class
+					&& com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()) {
+					TableRowCore next = event.keyCode == SWT.ARROW_UP ? getPreviousRow(focusedRow) : getNextRow(focusedRow);
+					if (next != null) setFocusedRow(next);
+					event.doit = false;
+					return;
+				}
 				boolean updateTable = false;
 				if (event.keyCode == SWT.ARROW_UP) {
 					TableRowCore rowToSelect = getPreviousRow(focusedRow);

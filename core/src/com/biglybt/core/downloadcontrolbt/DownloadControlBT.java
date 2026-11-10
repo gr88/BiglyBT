@@ -146,7 +146,7 @@ public final class DownloadControlBT
 		int					fileIndex )
 	{
 		DiskManagerFileInfo file = getFile( dm, fileIndex );
-		boolean blank = file == null || file.isSkipped() || file.getLength() <= 0;
+		boolean blank = file == null || file.getLength() <= 0;
 		return DownloadControlFileQueue.modeLetterForFile(
 			getPolicy( dm ),
 			isEnabled( dm ),
@@ -334,6 +334,7 @@ public final class DownloadControlBT
 		if ( file == null || file.getLength() <= 0 ){
 			return false;
 		}
+		setForwardStart(dm, fileIndex, -1);
 		if ( file.isSkipped()){
 			file.setSkipped( false );
 			log( dm, "fileIndex=" + fileIndex + " checked for download by S/R choice" );
@@ -342,6 +343,43 @@ public final class DownloadControlBT
 			setAutoQueueEnabled( dm, true );
 		}
 		return enableForFile( dm, fileIndex, mode );
+	}
+
+	private static final Object ACTIVE_BOUNDARY_KEY = new Object();
+
+	private static int forwardStart(DownloadManager dm, int fileIndex) {
+		if (dm == null || dm.getDownloadState() == null) return -1;
+		String[] values = dm.getDownloadState().getListAttribute(DownloadManagerState.AT_DLCBT_FORWARD_STARTS);
+		if (values != null) for (String s : values) {
+			try {
+				String[] parts = s.split("=");
+				if (parts.length == 2 && Integer.parseInt(parts[0]) == fileIndex) return Integer.parseInt(parts[1]);
+			} catch (RuntimeException e) { }
+		}
+		return -1;
+	}
+
+	private static void setForwardStart(DownloadManager dm, int fileIndex, int piece) {
+		DownloadManagerState state = dm.getDownloadState();
+		synchronized (state) {
+			java.util.List<String> out = new java.util.ArrayList<>();
+			String[] old = state.getListAttribute(DownloadManagerState.AT_DLCBT_FORWARD_STARTS);
+			String prefix = fileIndex + "=";
+			if (old != null) for (String s:old) if (!s.startsWith(prefix)) out.add(s);
+			if (piece >= 0) out.add(prefix + piece);
+			state.setListAttribute(DownloadManagerState.AT_DLCBT_FORWARD_STARTS, out.toArray(new String[0]));
+		}
+	}
+
+	/** Explicit action; the suffix is persisted and earlier pieces are not selected. */
+	public static boolean startForward(DownloadManager dm, int fileIndex, int piece) {
+		DiskManagerFileInfo file = getFile(dm, fileIndex);
+		if (!isProfileEnabled() || file == null || file.getLength() <= 0 || piece < file.getFirstPieceNumber() || piece > file.getLastPieceNumber()) return false;
+		file.setSkipped(false);
+		setForwardStart(dm, fileIndex, piece);
+		setFileModeOverride(dm, fileIndex, MODE_SEQUENTIAL);
+		dm.setUserData(ACTIVE_BOUNDARY_KEY, null);
+		return activateFile(dm, fileIndex, MODE_SEQUENTIAL, POLICY_AUTO);
 	}
 
 	static boolean
@@ -364,7 +402,8 @@ public final class DownloadControlBT
 			return false;
 		}
 
-		int first = file.getFirstPieceNumber();
+		int forward = forwardStart(dm, fileIndex);
+		int first = Math.max(file.getFirstPieceNumber(), forward);
 		int last = file.getLastPieceNumber();
 		boolean sameFileAndMode =
 			isEnabledForFile( dm, fileIndex ) && getEffectiveFileMode( dm, fileIndex ) == mode;
@@ -415,13 +454,15 @@ public final class DownloadControlBT
 			}
 		}else{
 			clearPlan( state );
-			order = DownloadControlStrictOrder.buildRequestOrder( first, last );
+			order = forward >= file.getFirstPieceNumber()
+				? DownloadControlFileQueue.forwardOrder(first, last)
+				: DownloadControlStrictOrder.buildRequestOrder( first, last );
 			log( dm,
 				"enabled experimental sequential order for fileIndex=" + fileIndex +
 				" length=" + file.getLength() +
 				" pieces=[" + first + ".." + last +
 				"] order=" + DownloadControlStrictOrder.formatPlan( order ) +
-				"; first,last,then interior ascending; " +
+				(forward >= file.getFirstPieceNumber() ? "; sequential forward from chosen piece; " : "; first,last,then interior ascending; ") +
 				"one hash-verified piece at a time; wait if unavailable" );
 		}
 
@@ -550,7 +591,8 @@ public final class DownloadControlBT
 		}
 
 		boolean empty = file.getLength() <= 0 || file.getNbPieces() <= 0;
-		int first = file.getFirstPieceNumber();
+		int start = forwardStart(dm, fileIndex);
+		int first = Math.max(file.getFirstPieceNumber(), start);
 		int last = file.getLastPieceNumber();
 		int mode = getEffectiveFileMode( dm, fileIndex );
 
@@ -565,7 +607,9 @@ public final class DownloadControlBT
 				return NO_PIECE;
 			}
 		}else{
-			order = DownloadControlStrictOrder.buildRequestOrder( first, last );
+			order = start >= file.getFirstPieceNumber()
+				? DownloadControlFileQueue.forwardOrder(first, last)
+				: DownloadControlStrictOrder.buildRequestOrder( first, last );
 		}
 
 		DownloadControlStrictOrder.HashVerifiedPieces verified =
@@ -599,6 +643,7 @@ public final class DownloadControlBT
 		}
 
 		int active = decision.activePiece;
+		if (allowAdvance) dm.setUserData(ACTIVE_BOUNDARY_KEY, Integer.valueOf(active));
 		logOnce( dm, "active-" + mode + "-" + active,
 			"active piece " + active +
 			" of fileIndex=" + fileIndex +
@@ -634,9 +679,14 @@ public final class DownloadControlBT
 			return;
 		}
 		DownloadManager dm = resolveDownloadManager( peerControl, diskManager );
-		logOnce( dm, "wait-" + allowedPiece,
-			"waiting for piece " + allowedPiece +
-			" (unavailable or not requestable); not falling back to a later piece" );
+		com.biglybt.core.peer.PEPiece p = peerControl.getPiece(allowedPiece);
+		DownloadControlBTRerequest.Coverage coverage = DownloadControlBTRerequest.coverage(peerControl, diskManager, p);
+		boolean covered = coverage.covered;
+		boolean arrived = coverage.allArrived;
+		String status = arrived ? "all block data arrived; awaiting disk write/hash verification" : covered
+			? "fully covered by received/requested blocks; automatic rerequest cadence active"
+			: "not currently available/requestable; no fallback to a later piece";
+		logOnce(dm, "wait-" + allowedPiece + "-" + status, "active piece " + allowedPiece + ": " + status);
 	}
 
 	public static void
@@ -897,8 +947,9 @@ public final class DownloadControlBT
 		synchronized( state ){
 			DownloadControlFileQueue.FileSnap[] files = snapshotFiles( dm, diskManager );
 			int pinned = getSelectedFileIndex( dm );
-			int next = DownloadControlFileQueue.pickPinnedOrNext(
-				files, pinned, createVerifiedView( diskManager ));
+			Object lastPiece = dm.getUserData(ACTIVE_BOUNDARY_KEY);
+			int next = DownloadControlFileQueue.pickAtPieceBoundary(
+				files, pinned, createVerifiedView( diskManager ), lastPiece instanceof Integer ? ((Integer)lastPiece).intValue() : -1);
 			if ( next < 0 ){
 				return;
 			}
@@ -917,6 +968,7 @@ public final class DownloadControlBT
 					"auto file queue selecting fileIndex=" + next +
 					" mode=" + DownloadControlStrictOrder.modeLetter( mode ) +
 					" (previous pinned fileIndex=" + pinned + ")" );
+				dm.setUserData(ACTIVE_BOUNDARY_KEY, null);
 				activateFile( dm, next, mode, POLICY_AUTO );
 			}
 		}
@@ -948,7 +1000,7 @@ public final class DownloadControlBT
 			snaps[i] = new DownloadControlFileQueue.FileSnap(
 				file.getIndex(),
 				file.getLength(),
-				file.getFirstPieceNumber(),
+				Math.max(file.getFirstPieceNumber(), forwardStart(dm, file.getIndex())),
 				file.getLastPieceNumber(),
 				file.getNbPieces(),
 				file.getPriority(),

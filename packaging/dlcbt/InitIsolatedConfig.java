@@ -81,6 +81,10 @@ public final class InitIsolatedConfig
 			ConfigurationDefaults.CFG_TORRENTADD_OPENOPTIONS_ALWAYS);
 		setIfUnset("Network Selection Default.I2P", true);
 		setIfUnset("Network Selection Default.Tor", true);
+		setIfUnset("Rename Incomplete Files", true);
+		setIfUnset("Rename Incomplete Files Extension", ".incomplete");
+		setIfUnset("DefaultDir.AutoSave.AutoRename", false);
+		setIfUnset("def.deletetorrent", false);
 		setIfUnset("Library.viewmode", 1);
 		setIfUnset("LibraryDL.viewmode", 1);
 		setIfUnset("LibraryCD.viewmode", 1);

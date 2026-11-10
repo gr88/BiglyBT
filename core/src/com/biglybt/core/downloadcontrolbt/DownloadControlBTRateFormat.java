@@ -8,7 +8,7 @@ import java.util.Locale;
 
 /**
  * Same conventional units as SpeedLimitHandler.parseRate: 251.1k is
- * 251.1 * 1024 bytes/sec. Used only for isolated DLCBT ban thresholds.
+ * 251.1 * 1024 bytes/sec. Used for isolated DLCBT ban thresholds and HTTP per-peer caps.
  */
 public final class DownloadControlBTRateFormat
 {
@@ -75,6 +75,8 @@ public final class DownloadControlBTRateFormat
 			String line = raw instanceof byte[]
 				? new String((byte[])raw, java.nio.charset.StandardCharsets.UTF_8 )
 				: String.valueOf( raw );
+			line = line.trim();
+			if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue;
 			String lc = line.toLowerCase( Locale.US );
 			int idx = lc.indexOf( "peer_down=" );
 			if ( idx < 0 ){
@@ -94,5 +96,24 @@ public final class DownloadControlBTRateFormat
 			}
 		}
 		return null;
+	}
+
+	private static volatile long cacheTime;
+	private static volatile int cachedDown;
+
+	/** Schedule's per-peer rate, cached for at most one second. No aggregate limit. */
+	public static int schedulePeerDown() {
+		if (!DownloadControlBT.isProfileEnabled()) return 0;
+		long now = com.biglybt.core.util.SystemTime.getMonotonousTime();
+		if (now - cacheTime > 1000 || cacheTime == 0) {
+			synchronized (DownloadControlBTRateFormat.class) {
+				String token = peerDownToken(com.biglybt.core.config.COConfigurationManager.getListParameter(
+					DownloadControlBTDefaults.CFG_SCHEDULE_LINES, new java.util.ArrayList()));
+				try { cachedDown = (int)Math.min(Integer.MAX_VALUE, parseRate(token == null ? DEFAULT_MAX : token)); }
+				catch (RuntimeException e) { cachedDown = (int)parseRate(DEFAULT_MAX); }
+				cacheTime = now;
+			}
+		}
+		return cachedDown;
 	}
 }

@@ -14,17 +14,16 @@ import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
 import com.biglybt.ui.common.table.TableColumnCore;
 import com.biglybt.ui.common.table.impl.TableColumnManager;
-import com.biglybt.ui.swt.views.tableitems.mytorrents.DLCTorrentModeItem;
 
 /**
  * One-shot (per Library table) DLCBT layout fix that also applies to
  * existing saved layouts: hide Play Now and the other DLCBT-hidden
- * columns, and on Incomplete tables show the DLC column after the name.
+ * columns, and remove the old torrent-level DLC column.
  * Runs once per table id; later user changes persist.
  */
 public final class DownloadControlBTLibraryColumns
 {
-	private static final String FLAG_PREFIX = "dlcbt.library.columns.v2.";
+	private static final String FLAG_PREFIX = "dlcbt.library.columns.v3.";
 
 	private DownloadControlBTLibraryColumns()
 	{
@@ -45,25 +44,13 @@ public final class DownloadControlBTLibraryColumns
 			if ( COConfigurationManager.getBooleanParameter( flag, false )){
 				return;
 			}
-			int namePos = -1;
 			for ( Object o: mapTCs.values()){
 				TableColumnCore tc = (TableColumnCore)o;
 				String id = tc.getName();
-				if ( DownloadControlBTDefaults.isHiddenDefaultLibraryColumn( id )){
+				if ( DownloadControlBTDefaults.isHiddenDefaultLibraryColumn( id ) || "dlcbt.torrent".equals(id)){
 					tc.setVisible( false );
 				}
-				if (( "name".equals( id ) || "name.thumb".equals( id )) && tc.isVisible()){
-					namePos = Math.max( namePos, tc.getPosition());
-				}
-			}
-			if ( incomplete ){
-				TableColumnCore dlc = (TableColumnCore)mapTCs.get( DLCTorrentModeItem.COLUMN_ID );
-				if ( dlc != null && !dlc.isVisible()){
-					dlc.setVisible( true );
-					if ( namePos >= 0 ){
-						dlc.setPositionNoShift( namePos + 1 );
-					}
-				}
+
 			}
 			TableColumnManager.getInstance().saveTableColumns( dataSourceType, tableID );
 			COConfigurationManager.setParameter( flag, true );

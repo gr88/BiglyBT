@@ -980,11 +980,23 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 
 				piecePicker.allocateRequests();
 
+				dlcbtRerequestCoveredPiece();
+
 				checkRescan();
 				checkSpeedAndReserved();
 
 				check99PercentBug();
 			}
+
+            if (DownloadControlBTBanService.get().isPolicyEnabled()) {
+                long nowMono = SystemTime.getMonotonousTime();
+                for (PEPeerTransport peer : peer_transports_cow) {
+                    // Same CONNECTION_* state used by Peers/StateItem. TCP connect
+                    // is CONNECTION_CONNECTING, never this trigger.
+                    DownloadControlBTBanService.get().onHandshakeTimeout(peer.getIp(),
+                        peer.getConnectionState(), peer.getConnectionEstablishedMonoTime(), nowMono);
+                }
+            }
 
 			updatePeersInSuperSeedMode();
 			doUnchokes();
@@ -4747,6 +4759,26 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 				}
 			}
 		};
+
+	private final com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest dlcbt_rerequest =
+		new com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest();
+
+	private void dlcbtRerequestCoveredPiece() {
+		int active = DownloadControlBT.getAllowedPieceNumber(this, disk_mgr);
+		PEPiece piece = active < 0 || active >= pePieces.length ? null : pePieces[active];
+		boolean covered = false;
+		if (piece != null && !piece.getDMPiece().isDone()) {
+			covered = com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest.coverage(this, disk_mgr, piece).covered;
+		}
+		if (dlcbt_rerequest.due(active, SystemTime.getMonotonousTime(), covered)) {
+			// Exactly the Pieces view's Rerequest Blocks operation: clear the
+			// outstanding marks, not received bytes or peer connections. The
+			// normal picker reissues blocks, still through the strict DLC gate.
+			for (int b=0; b<piece.getNbBlocks(); b++) {
+				if (!piece.isDownloaded(b) && !piece.isWritten(b) && piece.isRequested(b)) piece.clearRequested(b);
+			}
+		}
+	}
 
 	private void
 	dlcbtSamplePeerSpeeds()

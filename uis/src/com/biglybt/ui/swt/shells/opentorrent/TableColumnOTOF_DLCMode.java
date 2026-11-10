@@ -21,7 +21,7 @@ import com.biglybt.pif.ui.tables.TableColumnInfo;
 
 /**
  * Open Torrent Options file-table letter: S, R, or blank, reflecting the
- * pending Off / Auto queue / per-file override / skip state.
+ * pending Off / Auto queue / per-file override, even when unchecked.
  */
 public class TableColumnOTOF_DLCMode
 	implements TableCellRefreshListener, TableColumnExtraInfoListener
@@ -50,12 +50,12 @@ public class TableColumnOTOF_DLCMode
 		}
 		TorrentOpenFileOptions file = (TorrentOpenFileOptions) ds;
 		TorrentOpenOptions opts = file.getTorrentOptions();
-		boolean skippedOrEmpty = file == null || !file.isToDownload() || file.getSize() <= 0;
+		boolean emptyFile = file == null || file.getSize() <= 0;
 		boolean off = opts != null && opts.isDlcbtExplicitOff();
 		boolean auto = opts != null && opts.isDlcbtAutoQueue();
 		int override = opts == null ? DownloadControlStrictOrder.MODE_OFF : opts.getDlcbtFileMode( file.getIndex());
 		String text = DownloadControlFileQueue.modeLetterForPendingFile(
-			off, auto, override, skippedOrEmpty );
+			off, auto, override, emptyFile );
 		int sort = 0;
 		if ( "S".equals( text )){
 			sort = 1;

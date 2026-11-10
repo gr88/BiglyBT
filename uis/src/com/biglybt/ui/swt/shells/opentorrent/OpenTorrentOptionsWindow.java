@@ -427,6 +427,14 @@ public class OpenTorrentOptionsWindow
 						new TableColumnOTOF_DLCMode(column);
 					}
 				});
+		tcm.registerColumn(TorrentOpenFileOptions.class, TableColumnOTOF_FirstPiece.COLUMN_ID, column -> new TableColumnOTOF_FirstPiece(column));
+		tcm.registerColumn(TorrentOpenFileOptions.class, TableColumnOTOF_LastPiece.COLUMN_ID, column -> new TableColumnOTOF_LastPiece(column));
+		if (DownloadControlBT.isProfileEnabled()) {
+			java.util.List<String> defaults = new java.util.ArrayList<>(java.util.Arrays.asList(tcm.getDefaultColumnNames(TABLEID_FILES)));
+			if (!defaults.contains(TableColumnOTOF_FirstPiece.COLUMN_ID)) defaults.add(TableColumnOTOF_FirstPiece.COLUMN_ID);
+			if (!defaults.contains(TableColumnOTOF_LastPiece.COLUMN_ID)) defaults.add(TableColumnOTOF_LastPiece.COLUMN_ID);
+			tcm.setDefaultColumnNames(TABLEID_FILES, defaults.toArray(new String[0]));
+		}
 		ensureOpenTorrentDLCColumnVisible(tcm);
 	}
 
@@ -6605,6 +6613,7 @@ public class OpenTorrentOptionsWindow
 
 												torrentFileInfo.setPriority( priority, false );
 											}
+											if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 										}
 									});
 
@@ -6638,11 +6647,12 @@ public class OpenTorrentOptionsWindow
 
 								for ( TorrentOpenFileOptions file: infos ){
 
-									if ( !file.isPriorityAuto()){
+									if ( !file.isPriorityAuto() || DownloadControlBT.isProfileEnabled()){
 									
 										file.setPriority( --next_priority, false );
 									}
 								}
+								if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 
 								return;
 
@@ -6653,15 +6663,16 @@ public class OpenTorrentOptionsWindow
 
 							for (TorrentOpenFileOptions torrentFileInfo : infos) {
 
-								if ( !torrentFileInfo.isPriorityAuto()){
+								if ( !torrentFileInfo.isPriorityAuto() || DownloadControlBT.isProfileEnabled()){
 								
 									torrentFileInfo.setPriority( priority, false );
 								}
 							}
+							if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 						}
 					};
 					
-					itemPriority.setEnabled( !allPriorityAuto );
+					itemPriority.setEnabled( !allPriorityAuto || DownloadControlBT.isProfileEnabled());
 
 					boolean dlc_single = infos.length == 1;
 					int dlc_index = dlc_single ? infos[0].getIndex() : -1;
@@ -7061,6 +7072,17 @@ public class OpenTorrentOptionsWindow
 					TableViewSWT<TorrentOpenFileOptions> tv = tvFiles;
 					if ( tv == null || tv.isDisposed()){
 						return;
+					}
+					if (!COConfigurationManager.getBooleanParameter("dlcbt.oto.piece.columns.v1", false)) {
+						int newPosition = tv.getAllColumns().length;
+						for (com.biglybt.ui.common.table.TableColumnCore c: tv.getAllColumns()) {
+							if (TableColumnOTOF_FirstPiece.COLUMN_ID.equals(c.getName()) || TableColumnOTOF_LastPiece.COLUMN_ID.equals(c.getName())) {
+								c.setVisible(true);
+								c.setPositionNoShift(newPosition++);
+							}
+						}
+						TableColumnManager.getInstance().saveTableColumns(TorrentOpenFileOptions.class, tv.getTableID());
+						COConfigurationManager.setParameter("dlcbt.oto.piece.columns.v1", true);
 					}
 					for ( final com.biglybt.ui.common.table.TableColumnCore column: tv.getVisibleColumns()){
 						column.setPreferredWidth( -1 );

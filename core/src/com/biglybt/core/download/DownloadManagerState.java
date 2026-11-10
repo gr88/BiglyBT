@@ -119,6 +119,7 @@ DownloadManagerState
 	public static final String AT_DLCBT_PLAN_SEED			= "dlcbt.plan.seed";	// long
 	public static final String AT_DLCBT_PLAN_VER			= "dlcbt.plan.ver";	// int
 	public static final String AT_DLCBT_POLICY				= "dlcbt.policy";	// int, 0=unset, 1=auto, 2=manual, 3=off
+	public static final String AT_DLCBT_FORWARD_STARTS = "dlcbt.forward.starts"; // fileIndex=piece, persistent sequential suffix
 	public static final String AT_DLCBT_FILE_MODES			= "dlcbt.filemodes";	// String[] "index=mode" per-file overrides
 
 	

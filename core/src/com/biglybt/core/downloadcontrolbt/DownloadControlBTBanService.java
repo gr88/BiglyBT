@@ -179,6 +179,23 @@ public final class DownloadControlBTBanService
 		return ban;
 	}
 
+	/** Called only for the same connection state displayed as Waiting for Handshake. */
+	public DownloadControlBTBanRegistry.Ban onHandshakeTimeout(String address, int state, long establishedMono, long nowMono) {
+		if (!isPolicyEnabled() || !handshakeOverdue(state, establishedMono, nowMono)) return null;
+		DownloadControlBTBanRegistry.Ban ban;
+		synchronized (this) {
+			if (registry.isBanned(address, System.currentTimeMillis())) return null;
+			ban = applyBanLocked(address, System.currentTimeMillis(), "handshake-timeout", "waitingForHandshakeMs=" + (nowMono-establishedMono));
+		}
+		fire(ban);
+		return ban;
+	}
+
+	public static boolean handshakeOverdue(int state, long establishedMono, long nowMono) {
+		return state == com.biglybt.core.peer.impl.PEPeerTransport.CONNECTION_WAITING_FOR_HANDSHAKE
+			&& nowMono - establishedMono > 3000;
+	}
+
 	public synchronized int
 	unbanOwn(
 		String		address )

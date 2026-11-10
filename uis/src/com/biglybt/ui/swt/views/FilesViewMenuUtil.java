@@ -446,6 +446,27 @@ public class FilesViewMenuUtil
 				}
 			});
 
+			if (DownloadControlBT.isProfileEnabled() && dlc_file != null) {
+				MenuItem forward = new MenuItem(menuDLC, SWT.PUSH);
+				Messages.setLanguageText(forward, "menu.downloadcontrolbt.forward");
+				forward.setEnabled(dlc_file.getLength() > 0);
+				forward.addListener(SWT.Selection, event -> {
+					SimpleTextEntryWindow input = new SimpleTextEntryWindow("dlcbt.forward.title", "dlcbt.forward.text");
+					input.setPreenteredText(String.valueOf(dlc_file.getFirstPieceNumber()), false);
+					input.prompt(new UIInputReceiverListener() {
+						public void UIInputReceiverClosed(UIInputReceiver receiver) {
+							if (!receiver.hasSubmittedInput()) return;
+							boolean ok = false;
+							try { ok = DownloadControlBT.startForward(dlc_dm, dlc_file.getIndex(), Integer.parseInt(receiver.getSubmittedInput().trim())); }
+							catch (RuntimeException e) { }
+							if (!ok) new MessageBoxShell(SWT.ICON_ERROR | SWT.OK,
+								MessageText.getString("dlcbt.forward.title"),
+								MessageText.getString("dlcbt.forward.invalid", new String[]{String.valueOf(dlc_file.getFirstPieceNumber()), String.valueOf(dlc_file.getLastPieceNumber())})).open(null);
+						}
+					});
+				});
+			}
+
 			// "Auto file queue" switch removed: the strict one-file-at-a-time
 			// priority queue is always the engine when DLCBT is on.
 		}
@@ -2515,6 +2536,9 @@ public class FilesViewMenuUtil
 		}
 		
 		set.setPriority( priorities );
+		if ( DownloadControlBT.isProfileEnabled()){
+			setSkipped( manager, fileInfos, false, 0, false );
+		}
 	}
 	
 	private static void
@@ -2549,8 +2573,10 @@ public class FilesViewMenuUtil
 		}
 		
 		if ( changed ){
-		
 			set.setPriority( priorities );
+			if ( DownloadControlBT.isProfileEnabled()){
+				setSkipped( manager, fileInfos, false, 0, false );
+			}
 		}
 	}
 	

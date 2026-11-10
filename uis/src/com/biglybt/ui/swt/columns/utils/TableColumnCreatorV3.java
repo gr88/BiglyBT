@@ -21,7 +21,6 @@ package com.biglybt.ui.swt.columns.utils;
 import com.biglybt.activities.ActivitiesEntry;
 import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
 import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
-import com.biglybt.ui.swt.views.tableitems.mytorrents.DLCTorrentModeItem;
 import com.biglybt.core.util.Debug;
 import com.biglybt.core.util.LightHashMap;
 import com.biglybt.pif.download.Download;
@@ -180,7 +179,6 @@ public class TableColumnCreatorV3
 		final String[] stockVisibleOrder = {
 			RankItem.COLUMN_ID,
 			ColumnThumbAndName.COLUMN_ID,
-			DLCTorrentModeItem.COLUMN_ID,
 			ColumnStream.COLUMN_ID,
 			ColumnProgressETA.COLUMN_ID,
 			SizeItem.COLUMN_ID,
@@ -395,6 +393,8 @@ public class TableColumnCreatorV3
 				tcShareRatioItem.setChangeFG(false);
 			}
 		}
+
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTLibraryColumns.applyOnce(mapTCs, Download.class, tableID, false);
 
 		return mapTCs.values().toArray(new TableColumnCore[0]);
 	}

@@ -545,6 +545,21 @@ public abstract class TableViewSWT_Common
 			return;
 		}
 
+		if (event.stateMask == SWT.MOD1 && event.keyCode == ' ' && !inFilterBox
+			&& com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()) {
+			TableRowCore row = tv.getFocusedRow();
+			if (row != null && row.getDataSource(true) instanceof com.biglybt.core.peer.PEPeer) {
+				java.util.List<TableRowCore> rows = new java.util.ArrayList<>(java.util.Arrays.asList(tv.getSelectedRows()));
+				if (rows.contains(row)) rows.remove(row); else rows.add(row);
+				tv.setSelectedRows(rows.toArray(new TableRowCore[0]));
+				if (tv instanceof com.biglybt.ui.swt.views.table.painted.TableViewPainted) {
+					((com.biglybt.ui.swt.views.table.painted.TableViewPainted)tv).setFocusedRow(row);
+				}
+				event.doit = false;
+				return;
+			}
+		}
+
 		int key = event.character;
 		if (key <= 26 && key > 0) {
 			key += 'a' - 1;

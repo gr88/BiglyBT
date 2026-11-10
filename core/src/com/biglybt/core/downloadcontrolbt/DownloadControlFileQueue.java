@@ -209,6 +209,26 @@ public final class DownloadControlFileQueue
 		return -1;
 	}
 
+	/** Preempt only a strictly higher-priority file, after the current piece verifies. */
+	public static int pickAtPieceBoundary(FileSnap[] files, int pinnedIndex,
+		DownloadControlStrictOrder.HashVerifiedPieces verified, int activePiece) {
+		FileSnap pinned = fileAt(files, pinnedIndex);
+		if (!isEligible(pinned) || isFileFinished(pinned, verified)) return pickPinnedOrNext(files, -1, verified);
+		if (activePiece >= 0 && (verified == null || !verified.isHashVerified(activePiece))) return pinnedIndex;
+		for (FileSnap file : queueOrder(files)) {
+			if (file.priority > pinned.priority && !isFileFinished(file, verified)) return file.index;
+		}
+		return pinnedIndex;
+	}
+
+	/** True sequential suffix, not the legacy first/last/interior order. */
+	public static int[] forwardOrder(int start, int last) {
+		if (start < 0 || last < start) return new int[0];
+		int[] result = new int[last-start+1];
+		for (int i=0;i<result.length;i++) result[i] = start+i;
+		return result;
+	}
+
 	public static int
 	effectiveFileMode(
 		int		torrentDefaultMode,
@@ -248,8 +268,8 @@ public final class DownloadControlFileQueue
 
 	/**
 	 * Add-dialog letter for a pending file: S/R from a stored override,
-	 * R for every unskipped nonempty file when auto queue is on (default
-	 * Random), blank when Off, skipped, or empty. Mirrors
+	 * R for every nonempty file when auto queue is on (default
+	 * Random), blank when Off or empty, even if unchecked. Mirrors
 	 * {@link #modeLetterForFile} for not-yet-added torrents.
 	 */
 	public static String
@@ -257,9 +277,9 @@ public final class DownloadControlFileQueue
 		boolean		explicitOff,
 		boolean		autoQueue,
 		int			fileOverrideMode,
-		boolean		skippedOrEmpty )
+		boolean		emptyFile )
 	{
-		if ( explicitOff || skippedOrEmpty ){
+		if ( explicitOff || emptyFile ){
 			return "";
 		}
 		if ( fileOverrideMode == DownloadControlStrictOrder.MODE_SEQUENTIAL ){

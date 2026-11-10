@@ -154,7 +154,7 @@ implements PEPeerTransport
 
 	private boolean identityAdded = false;  //needed so we don't remove id's in closeAll() on duplicate connection attempts
 
-	private int connection_state = PEPeerTransport.CONNECTION_PENDING;
+	private volatile int connection_state = PEPeerTransport.CONNECTION_PENDING;
 	
 	private long 	outbound_connection_start;
 	private int 	outbound_connection_progress	= CP_UNKNOWN;

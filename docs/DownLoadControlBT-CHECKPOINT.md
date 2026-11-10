@@ -1,46 +1,56 @@
-# DownLoadControlBT checkpoint (2026-11-09, America/Chicago)
+# DownLoadControlBT checkpoint — 2026-11-10 (America/Chicago)
 
-Ban enforcement, queue-switch removal, Library DLC column, Play Now
-hiding, Open Torrent Options sizing/autofit, upload unlimited and the
-SWT 4.968 default are in source with unit tests (see the changelog
-2026-11-09 entry). Nothing here is GUI- or live-peer-verified.
+Next increment starts at 36e9e663d / release 202611090124. All requested
+source changes except the non-blocking doubled-window issue are in this
+increment; see the 2026-11-10 changelog for the precise status table.
 
-## Known limits of the ban implementation
+## Implemented
 
-- Bans live in memory; restarting the client clears them. No unban UI;
-  `dlcbt.ban.enabled=false` turns the policy off (existing bans then
-  stop being enforced because every check is policy-gated).
-- Speed rule is not measured while any torrent or global download cap
-  is set, so a user cap cannot ban every peer.
-- The post-handshake same-IP close in `PEPeerTransportProtocol` is not
-  counted as a duplicate (only the `PeerManager.route` incoming reject
-  is), so one socket is never double-counted.
-- Above-max bans are rare in practice because the per-peer `peer_down`
-  limiter already caps peers at the same value.
+- Stored file S/R stays visible when unchecked; explicit priorities check
+  selected files in both file tables.
+- No torrent DLC column in any Library view; Play Now stays hidden.
+- Separate per-HTTP-peer limiter follows schedule peer_down, never a
+  torrent/global cap; HTTP peers stay out of speed-ban sampling.
+- Fully-covered active-piece automatic Rerequest Blocks, immediately
+  then at most every 2 seconds; stop once data arrives; no gate bypass.
+- Exact Peers-view Waiting for Handshake state (>3s) uses the existing
+  54–64 minute temporary-ban registry; TCP Connecting is excluded.
+- Higher-priority files preempt only after current piece hash-verifies.
+- Files/Experimental forward-from-piece action with persisted per-file
+  sequential suffix. S/R clears the suffix; earlier pieces remain missing
+  until that explicit change or Off. Then queues next file by priority.
+- First/Last piece columns in Open Torrent Options, Peers Ctrl+Space
+  toggle + Ctrl-arrow focus, Sources Seeds descending default once.
+- Unset-only defaults: .incomplete enabled, auto-rename data off, don't
+  delete torrent on remove. Explicit existing/later preferences survive.
 
-## Unresolved UI (best effort only)
+## Verification and limits
 
-- Column-width drag unreliable; reorder works.
-- Files tab first right-click view jump.
-- Choose-torrent native `FileDialog` (`OpenTorrentWindow.java` ~376)
-  top offscreen: no portable SWT placement for GTK native dialogs.
-- Doubled small/large window with HDMI extended desktop. SWT 4.968 is
-  now the default (4.922 via `--legacy-swt`) as a mitigation to try.
-- GTK checkbox with no checkmark: not reproducible on the build box
-  (both SWT jars render checkmarks under Xvfb). The box GTK printed
-  "Could not load a pixbuf from .../Adwaita/assets/check-symbolic.svg",
-  so a missing SVG pixbuf loader (e.g. librsvg2-common /
-  gdk-pixbuf loaders cache) on the desktop is a plausible cause to check.
+- Full Maven core + UI reactor package: 164 tests pass, zero failures,
+  errors or skips (90 DLCBT tests). UI shade build succeeds. SWT 4.968
+  resolves all 1762 SWT member references.
+- Init helper defaults verified, including explicit contrary values
+  surviving a subsequent init.
+- Real-facade regression tests exercise piece-boundary preemption,
+  unchecked mode letters and the forward suffix moving to the next file.
+- Local synthetic disk fixture verifies partial/complete plain and
+  .incomplete files in moved folders (4 cases), then repeats after core
+  restart using saved isolated state. No live torrent/network resumption
+  claimed, no GUI test, no remote HTTP throughput measurement.
+- Handshake trigger is confirmed against Peers StateItem and
+  PEPeerTransportProtocol.init() in code; tests cover exact timeout/state,
+  temporary duration, address identity and all-controller notification.
+- No broad filesystem searches, user torrent/media/log input, regular
+  BiglyBT profile or public torrents used. Fixture data/logs stay in temp.
 
-## Future idea (not implemented)
+## Unresolved, non-blocking
 
-When a piece is full of received or requested data, that is a good
-moment to hit Rerequest Blocks; possibly make it automatic.
+Doubled window after resolution changes / moving between displays, even
+without HDMI: no reproduction on the build box. Keep SWT 4.968 and the
+4.922 fallback; no speculative scale environment rewrites. Launching on
+the intended monitor was reported to help, not guaranteed.
+Old column-width drag, first Files right-click jump, native file chooser
+placement and checkbox-rendering issues remain unproven on the laptop.
 
-## Intentional non-goals already decided
-
-No /24 or /64 widening of DLCBT bans. No peer-ID cross-family bans. No
-public network tests. Restart transport remains as user-confirmed.
-Queue engine stays one-file-at-a-time; Off still disables gates.
-
-stage/ under packaging/dlcbt is a prior build artifact; do not commit it.
+No upstream changes. PR #1 never merged. No new cloud agents. Never
+commit packaging/dlcbt/stage/, logs, fixture payloads or credentials.

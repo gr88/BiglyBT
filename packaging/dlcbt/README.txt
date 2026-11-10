@@ -52,9 +52,9 @@ Requirements
 ------------
 - A Linux x86_64 system with GTK 3 libraries for the SWT GUI
   (typically already present on Ubuntu Desktop)
-- Java 17 JRE or JDK. The launcher uses $JAVA_HOME/bin/java when that
-  file is executable; otherwise it uses java from PATH. Java 8+ may
-  start; this package was built with Temurin 17.0.21.
+- Java 17+ JRE or JDK (required by the default SWT). The launcher uses
+  $JAVA_HOME/bin/java when executable; otherwise java from PATH.
+  Built and tested with Temurin 17.0.21.
   Example: sudo apt install openjdk-17-jre
 - This package will refuse to start on non-x86_64 CPUs because it ships
   Linux x86_64 SWT natives
@@ -155,6 +155,8 @@ with that address is closed on all torrents.
   gate waits and hash-check waits pause the clock instead of counting
   as zero. Time while a torrent or global download limit is set is not
   measured (a cap could push every peer under 10k).
+- Handshake: Waiting for Handshake for >3 seconds (not TCP Connecting)
+  gets the same temporary ban.
 - Duplicates: the 3rd rejected incoming duplicate connection from the
   same address on the same torrent within 60 s bans it. Different
   torrents do not add up; outgoing dials are never counted.
@@ -190,48 +192,61 @@ persisted download state, including any previous Sequential enablement,
 is reused. A config reset is not required. Sequential-enabled downloads
 keep Sequential (S) after this upgrade.
 
-Exact first test steps (Random)
--------------------------------
-Use a legal torrent you already have the right to download. Pick a small
-file so the plan is easy to read in the log. Experimental order stays
-disabled until you turn it on.
+This increment: quick tests
+--------------------------
+Use a legal test torrent and keep your normal BiglyBT untouched.
 
-1. Start the isolated client:
+1. In Open Torrent Options, uncheck a nonempty file: its stored S/R
+   should stay visible. Select unchecked files and set Numeric Auto
+   Decreasing (or another priority): they should become checked and
+   show the priority. Repeat in the Files tab.
+2. First piece / Last piece columns should be visible in the add dialog.
+   Numbers are torrent-global and zero-based, matching Pieces view.
+   Library should have no DLC torrent column and no Play Now column.
+3. During a download, raise another file's priority. The current piece
+   must finish AND hash-verify before the queue switches files.
+4. Files > Experimental: DownLoadControlBT > Start from this piece and
+   go forward sequentially... accepts a piece number inside that file.
+   It checks the file, starts there, then requests the ascending suffix
+   one verified piece at a time. At the suffix end it queues the next
+   file. Earlier pieces stay missing until you choose ordinary S/R again
+   (clears that start point) or Off. The choice persists across restart.
+5. Automatic Rerequest Blocks now runs on a fully covered active piece
+   (received blocks plus requested/promised blocks). It clears only
+   outstanding request marks, exactly like the manual Pieces action,
+   immediately and then at most every 2 seconds when fully covered
+   again. It stops after all block data arrives; hash verification still
+   gates the next piece. It never resets received data.
+6. HTTP/External Seeds get their own per-peer download limiter from
+   peer_down (251.1k by default), not an aggregate limit. Check their
+   observed speeds. They remain excluded from speed bans.
+7. A regular peer shown as Waiting for Handshake for >3 seconds is
+   temporarily banned (same 54-64 min, exact address, all torrents).
+   TCP Connecting / Pending time does NOT count. Log reason:
+   DLCBT temporary ban reason=handshake-timeout.
+8. Peers: Ctrl+click rows; Ctrl+Up/Down moves focus without clearing
+   selection; Ctrl+Space toggles the focused row. Sources should first
+   sort Seeds highest first. Later user sort changes are remembered.
+9. Existing partial/complete data: select the folder holding it, add
+   stopped, then Force Recheck before starting. This build does not
+   change BiglyBT's disk hash/recheck engine. Automated local fixtures
+   verified plain and .incomplete partial/complete files in moved folders,
+   including a core restart with saved download state. Back up your
+   existing data/config before testing; do not copy regular ~/.biglybt.
 
-       ./start-dlcbt.sh
+File defaults are seeded only if unset (saved explicit preferences win):
+  Rename Incomplete Files=true
+  Rename Incomplete Files Extension=.incomplete
+  DefaultDir.AutoSave.AutoRename=false
+  def.deletetorrent=false
+No per-torrent/global download caps are added and custom schedules are
+never rewritten.
 
-2. Add that legal torrent. Keep it STOPPED. Do not start downloading yet.
-   In BiglyBT: use the open/add torrent action and choose to add the
-   torrent in a stopped/queued state.
-
-3. Open that torrent's Files view. Select exactly one file. Do not
-   multi-select other files. The DLC column should be blank on every
-   file until you enable a mode.
-
-4. Right-click that one file and choose:
-
-       Experimental: DownLoadControlBT -> Random (R)
-
-   The DLC column should show R on that file only. Other files stay blank.
-
-5. Only after the column shows R, start the torrent/download.
-
-Expected piece order for the selected file: its first containing piece,
-then its last distinct containing piece, then a shuffle of the interior
-pieces. The same plan is reused if you stop and later restart the client
-without changing mode or file. The client waits if the current piece is
-unavailable; it does not skip ahead. One piece stays active until it is
-hash-verified.
-
-Watch data/logs/biglybt.log for lines starting with "DownLoadControlBT:".
-A Random enable should log mode information, the seed, and the full
-order= list. Later lines use keys such as active-R-<piece>, req-<piece>,
-wait-<piece>, and complete. Sequential enablement logs a first-last-then-
-ascending order instead, and active keys use active-S-<piece>.
-
-To compare modes on the same file, switch the submenu to Sequential (S)
-or Off. Switching mode writes a new plan as appropriate. Off clears the
-DLC letter.
+Known issues: display doubling after resolution/monitor moves remains
+unresolved. SWT 4.968 is the default; compare --legacy-swt if needed.
+Launching the terminal/client on the intended monitor was reported to
+help, but is not a proven fix. Ctrl-selection and new menus/columns are
+source-tested/build-tested, not GUI-verified on the reporting laptop.
 
 How to stop (keeps experiment files)
 ------------------------------------
