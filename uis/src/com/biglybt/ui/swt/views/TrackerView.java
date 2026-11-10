@@ -123,6 +123,11 @@ public class TrackerView
 	{
 		registerPluginViews();
 
+		if (com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()) {
+			com.biglybt.ui.common.table.impl.TableColumnManager.getInstance().setDefaultSortColumnName(TableManager.TABLE_TORRENT_TRACKERS, "seeds");
+			for (com.biglybt.ui.common.table.TableColumnCore c: basicItems) if ("seeds".equals(c.getName())) c.setSortAscending(false);
+		}
+
 		tv = TableViewFactory.createTableViewSWT(
 				PLUGIN_DS_TYPE,
 				TableManager.TABLE_TORRENT_TRACKERS,
@@ -554,6 +559,18 @@ public class TrackerView
 	public void
 	tableViewInitialized()
 	{
+		if (com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()
+			&& !com.biglybt.core.config.COConfigurationManager.getBooleanParameter("dlcbt.sources.sort.seeds.v1", false)) {
+			for (com.biglybt.ui.common.table.TableColumnCore c: tv.getAllColumns()) {
+				if ("seeds".equals(c.getName())) {
+					c.setSortAscending(false);
+					tv.setSortColumns(new com.biglybt.ui.common.table.TableColumnCore[]{c}, false);
+					com.biglybt.core.config.COConfigurationManager.setParameter("dlcbt.sources.sort.seeds.v1", true);
+					break;
+				}
+			}
+		}
+
 		if ( manager != null ){
 
 			manager.addTPSListener( this );

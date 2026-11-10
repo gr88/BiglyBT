@@ -68,3 +68,11 @@ We build our installers using [Install4j, multi-platform installer builder](http
 ![Install4j Logo](https://www.ej-technologies.com/images/product_banners/install4j_large.png)
 
 Our binaries and installers up to and including v3.4 are signed with a digital signature of "Bigly Software". Releases after v3.4 will use an individual signing certificate and will bear the name "Arron Mogge (Open Source Developer)" denoting the identity of our team member responsible for signing.
+
+## DownLoadControlBT experiment
+
+This fork's `DownLoadControlBT` branch contains an experimental strict
+selected-file piece-order prototype. See [DownLoadControlBT.md](DownLoadControlBT.md)
+for the upstream base commit, build/test commands, enable steps, and phase-1
+limitations. It is not production-ready.
+

@@ -26,6 +26,7 @@ import com.biglybt.pif.download.DownloadException;
 import com.biglybt.pif.ui.menus.MenuManager;
 import com.biglybt.pifimpl.local.download.DownloadManagerImpl;
 import com.biglybt.ui.swt.Messages;
+import com.biglybt.ui.swt.TorrentUtil;
 import com.biglybt.ui.swt.Utils;
 import com.biglybt.ui.swt.components.DoubleBufferedLabel;
 import com.biglybt.ui.swt.views.utils.ManagerUtils;
@@ -123,6 +124,23 @@ public class DownloadBar extends MiniBar {
 		});
 		itemQueue.setEnabled(ManagerUtils.isStartable(download));
 
+		if (TorrentUtil.isForceStartVisible(new DownloadManager[] {
+			download
+		})) {
+			final MenuItem itemForceStart = new MenuItem(menu, SWT.CHECK);
+			Messages.setLanguageText(itemForceStart, "MyTorrentsView.menu.forceStart");
+			com.biglybt.ui.swt.Utils.setMenuItemImage(itemForceStart, "forcestart");
+			itemForceStart.setSelection(download.isForceStart());
+			itemForceStart.setEnabled(ManagerUtils.isForceStartable(download, true));
+			itemForceStart.addListener(SWT.Selection, new Listener() {
+				@Override
+				public void handleEvent(Event e) {
+					if (ManagerUtils.isForceStartable(download, true)) {
+						download.setForceStart(itemForceStart.getSelection());
+					}
+				}
+			});
+		}
 
 		// Stop
 		final MenuItem itemStop = new MenuItem(menu, SWT.PUSH);

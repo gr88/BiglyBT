@@ -46,6 +46,8 @@ import com.biglybt.core.content.RelatedAttributeLookupListener;
 import com.biglybt.core.content.RelatedContentManager;
 import com.biglybt.core.download.DownloadManager;
 import com.biglybt.core.download.DownloadManagerAvailability;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.TablePointerHit;
 import com.biglybt.core.download.DownloadManagerFactory;
 import com.biglybt.core.internat.LocaleTorrentUtil;
 import com.biglybt.core.internat.LocaleUtilDecoder;
@@ -118,6 +120,43 @@ import com.biglybt.pif.ui.tables.TableColumnCreationListener;
 public class OpenTorrentOptionsWindow
 	implements UIUpdatable
 {
+
+		// DLCBT: open at ~90% of the monitor, centered, once per profile
+		// (and once for testers with an older saved size). Later user
+		// resizes are saved by the normal "otow" shell metrics.
+
+	private static final String DLCBT_OTOW_SIZE_FLAG = "dlcbt.otow.size.v1";
+
+	private static void
+	dlcbtApplyDefaultSizeOnce(
+		Shell	shell )
+	{
+		try{
+			if ( shell == null || shell.isDisposed() || !DownloadControlBT.isProfileEnabled()){
+				return;
+			}
+			if ( COConfigurationManager.getBooleanParameter( DLCBT_OTOW_SIZE_FLAG, false )){
+				return;
+			}
+			org.eclipse.swt.widgets.Monitor mon = shell.getMonitor();
+			if ( mon == null ){
+				mon = shell.getDisplay().getPrimaryMonitor();
+			}
+			if ( mon == null ){
+				return;
+			}
+			Rectangle ca = mon.getClientArea();
+			int w = Math.max( 400, ca.width * 9 / 10 );
+			int h = Math.max( 300, ca.height * 9 / 10 );
+			w = Math.min( w, ca.width );
+			h = Math.min( h, ca.height );
+			shell.setBounds( ca.x + ( ca.width - w ) / 2, ca.y + ( ca.height - h ) / 2, w, h );
+			COConfigurationManager.setParameter( DLCBT_OTOW_SIZE_FLAG, true );
+		}catch( Throwable e ){
+			Debug.out( e );
+		}
+	}
+
 	private static final AtomicInteger	window_id_next = new AtomicInteger();
 	
 	private static final Map<HashWrapper,OpenTorrentOptionsWindow>	active_windows = new HashMap<>();
@@ -374,9 +413,53 @@ public class OpenTorrentOptionsWindow
 				TableColumnOTOF_Name.COLUMN_ID,
 				TableColumnOTOF_Size.COLUMN_ID,
 				TableColumnOTOF_Path.COLUMN_ID,
-				TableColumnOTOF_Priority.COLUMN_ID
+				TableColumnOTOF_Priority.COLUMN_ID,
+				TableColumnOTOF_DLCMode.COLUMN_ID
 			});
 			tcm.setDefaultSortColumnName(TABLEID_FILES, TableColumnOTOF_Position.COLUMN_ID);
+		}
+		// Always register so existing saved table layouts can show the column.
+		tcm.registerColumn(TorrentOpenFileOptions.class,
+				TableColumnOTOF_DLCMode.COLUMN_ID,
+				new TableColumnCreationListener() {
+					@Override
+					public void tableColumnCreated(TableColumn column) {
+						new TableColumnOTOF_DLCMode(column);
+					}
+				});
+		tcm.registerColumn(TorrentOpenFileOptions.class, TableColumnOTOF_FirstPiece.COLUMN_ID, column -> new TableColumnOTOF_FirstPiece(column));
+		tcm.registerColumn(TorrentOpenFileOptions.class, TableColumnOTOF_LastPiece.COLUMN_ID, column -> new TableColumnOTOF_LastPiece(column));
+		if (DownloadControlBT.isProfileEnabled()) {
+			java.util.List<String> defaults = new java.util.ArrayList<>(java.util.Arrays.asList(tcm.getDefaultColumnNames(TABLEID_FILES)));
+			if (!defaults.contains(TableColumnOTOF_FirstPiece.COLUMN_ID)) defaults.add(TableColumnOTOF_FirstPiece.COLUMN_ID);
+			if (!defaults.contains(TableColumnOTOF_LastPiece.COLUMN_ID)) defaults.add(TableColumnOTOF_LastPiece.COLUMN_ID);
+			tcm.setDefaultColumnNames(TABLEID_FILES, defaults.toArray(new String[0]));
+		}
+		ensureOpenTorrentDLCColumnVisible(tcm);
+	}
+
+	private static void
+	ensureOpenTorrentDLCColumnVisible(
+		TableColumnManager tcm )
+	{
+		if ( tcm == null ){
+			return;
+		}
+		String[] names = tcm.getDefaultColumnNames(TABLEID_FILES);
+		if ( names != null ){
+			boolean have = false;
+			for ( String n: names ){
+				if ( TableColumnOTOF_DLCMode.COLUMN_ID.equals( n )){
+					have = true;
+					break;
+				}
+			}
+			if ( !have ){
+				String[] merged = new String[names.length + 1];
+				System.arraycopy( names, 0, merged, 0, names.length );
+				merged[names.length] = TableColumnOTOF_DLCMode.COLUMN_ID;
+				tcm.setDefaultColumnNames(TABLEID_FILES, merged);
+			}
 		}
 	}
 	
@@ -1106,6 +1189,8 @@ public class OpenTorrentOptionsWindow
 					}
 					
 					dlg.open("otow",false,moveBelow==null?null:moveBelow.getShell());
+
+					dlcbtApplyDefaultSizeOnce( dlg.getShell());
 	
 					if ( separate_dialogs ){
 						
@@ -6528,6 +6613,7 @@ public class OpenTorrentOptionsWindow
 
 												torrentFileInfo.setPriority( priority, false );
 											}
+											if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 										}
 									});
 
@@ -6561,11 +6647,12 @@ public class OpenTorrentOptionsWindow
 
 								for ( TorrentOpenFileOptions file: infos ){
 
-									if ( !file.isPriorityAuto()){
+									if ( !file.isPriorityAuto() || DownloadControlBT.isProfileEnabled()){
 									
 										file.setPriority( --next_priority, false );
 									}
 								}
+								if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 
 								return;
 
@@ -6576,15 +6663,89 @@ public class OpenTorrentOptionsWindow
 
 							for (TorrentOpenFileOptions torrentFileInfo : infos) {
 
-								if ( !torrentFileInfo.isPriorityAuto()){
+								if ( !torrentFileInfo.isPriorityAuto() || DownloadControlBT.isProfileEnabled()){
 								
 									torrentFileInfo.setPriority( priority, false );
 								}
 							}
+							if (DownloadControlBT.isProfileEnabled()) setToDownload(infos, true);
 						}
 					};
 					
-					itemPriority.setEnabled( !allPriorityAuto );
+					itemPriority.setEnabled( !allPriorityAuto || DownloadControlBT.isProfileEnabled());
+
+					boolean dlc_single = infos.length == 1;
+					int dlc_index = dlc_single ? infos[0].getIndex() : -1;
+					boolean dlc_empty = dlc_single && infos[0].getSize() <= 0;
+					// S / R on an unchecked file also checks it for download
+					String dlc_disable = TablePointerHit.modeOverrideDisableReason(
+						!dlc_single, false, dlc_empty );
+					boolean dlc_usable = dlc_disable == null;
+					int dlc_file_mode = dlc_single ? torrentOptions.getDlcbtFileMode(dlc_index) : 0;
+					boolean dlc_off = torrentOptions.isDlcbtExplicitOff();
+					if ( !dlc_off && dlc_single && dlc_file_mode == 0 && torrentOptions.isDlcbtAutoQueue()){
+						dlc_file_mode = DownloadControlBT.MODE_RANDOM;
+					}
+
+					final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
+					Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
+					itemDownloadControlBT.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.tooltip"));
+					Menu menuDLC = new Menu(shell, SWT.DROP_DOWN);
+					itemDownloadControlBT.setMenu(menuDLC);
+
+					final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
+					itemDLCOff.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.off.tooltip"));
+					itemDLCOff.setSelection(dlc_off);
+					itemDLCOff.addListener(SWT.Selection, event -> {
+						if (itemDLCOff.getSelection()) {
+							torrentOptions.setDlcbtExplicitOff(true);
+							refreshDLCFileColumn();
+						}
+					});
+
+					final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
+					itemDLCSequential.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.sequential.tooltip"));
+					itemDLCSequential.setSelection(!dlc_off && dlc_file_mode == DownloadControlBT.MODE_SEQUENTIAL);
+					itemDLCSequential.setEnabled(dlc_usable);
+					itemDLCSequential.setToolTipText( dlcModeOverrideTooltip( dlc_disable,
+						"menu.downloadcontrolbt.sequential.tooltip" ));
+					itemDLCSequential.addListener(SWT.Selection, event -> {
+						if (itemDLCSequential.getSelection() && dlc_usable) {
+							if (!infos[0].isToDownload()) {
+								setToDownload(infos, true);
+							}
+							torrentOptions.setDlcbtAutoQueue(true);
+							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_SEQUENTIAL);
+							refreshDLCFileColumn();
+						}
+					});
+
+					final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
+					Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
+					itemDLCRandom.setToolTipText(
+						MessageText.getString("menu.downloadcontrolbt.random.tooltip"));
+					itemDLCRandom.setSelection(!dlc_off && dlc_file_mode == DownloadControlBT.MODE_RANDOM);
+					itemDLCRandom.setEnabled(dlc_usable);
+					itemDLCRandom.setToolTipText( dlcModeOverrideTooltip( dlc_disable,
+						"menu.downloadcontrolbt.random.tooltip" ));
+					itemDLCRandom.addListener(SWT.Selection, event -> {
+						if (itemDLCRandom.getSelection() && dlc_usable) {
+							if (!infos[0].isToDownload()) {
+								setToDownload(infos, true);
+							}
+							torrentOptions.setDlcbtAutoQueue(true);
+							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_RANDOM);
+							refreshDLCFileColumn();
+						}
+					});
+
+					// "Auto file queue" switch removed: the strict one-file-at-a-time
+					// priority queue is always the engine when DLCBT is on.
 
 					itemNumeric.addListener(SWT.Selection, priorityListener);
 					itemNumericAuto.addListener(SWT.Selection, priorityListener);
@@ -6889,6 +7050,61 @@ public class OpenTorrentOptionsWindow
 			}
 			
 			tvFiles.addDataSources( visible_files.toArray( new TorrentOpenFileOptions[0] ));
+
+			dlcbtScheduleAutofitOnce();
+		}
+
+		private boolean dlcbt_autofit_done;
+
+			// DLCBT: size each visible Files column to its content once,
+			// shortly after the torrent's rows are added. Later manual
+			// resizes are left alone.
+
+		private void
+		dlcbtScheduleAutofitOnce()
+		{
+			if ( dlcbt_autofit_done || !DownloadControlBT.isProfileEnabled()){
+				return;
+			}
+			dlcbt_autofit_done = true;
+			Utils.execSWTThreadLater( 1200, () -> {
+				try{
+					TableViewSWT<TorrentOpenFileOptions> tv = tvFiles;
+					if ( tv == null || tv.isDisposed()){
+						return;
+					}
+					if (!COConfigurationManager.getBooleanParameter("dlcbt.oto.piece.columns.v1", false)) {
+						int newPosition = tv.getAllColumns().length;
+						for (com.biglybt.ui.common.table.TableColumnCore c: tv.getAllColumns()) {
+							if (TableColumnOTOF_FirstPiece.COLUMN_ID.equals(c.getName()) || TableColumnOTOF_LastPiece.COLUMN_ID.equals(c.getName())) {
+								c.setVisible(true);
+								c.setPositionNoShift(newPosition++);
+							}
+						}
+						TableColumnManager.getInstance().saveTableColumns(TorrentOpenFileOptions.class, tv.getTableID());
+						COConfigurationManager.setParameter("dlcbt.oto.piece.columns.v1", true);
+					}
+					for ( final com.biglybt.ui.common.table.TableColumnCore column: tv.getVisibleColumns()){
+						column.setPreferredWidth( -1 );
+						int done = tv.runForAllRows( new com.biglybt.ui.common.table.TableGroupRowRunner() {
+							@Override
+							public void run( TableRowCore row ){
+								row.fakeRedraw( column.getName());
+							}
+						});
+						int pref = done == 0
+							? Math.max( column.getMinWidth(), column.getPreferredHeaderWidth())
+							: Math.max( column.getPreferredWidth(), column.getPreferredHeaderWidth());
+						if ( pref > 0 ){
+							column.setWidth( pref );
+						}
+					}
+					com.biglybt.ui.common.table.TableStructureEventDispatcher.getInstance(
+						tv.getTableID()).tableStructureChanged( false, null );
+				}catch( Throwable e ){
+					Debug.out( e );
+				}
+			});
 		}
 
 		@Override
@@ -7767,6 +7983,30 @@ public class OpenTorrentOptionsWindow
 			sep2.setLayoutData(gridData);
 		}
 
+
+		private void refreshDLCFileColumn() {
+			if ( tvFiles != null ){
+				tvFiles.refreshTable(false);
+			}
+		}
+
+		private String
+		dlcModeOverrideTooltip(
+			String		disableReason,
+			String		enabledKey )
+		{
+			if ( TablePointerHit.DISABLE_MULTI.equals( disableReason )){
+				return MessageText.getString( "menu.downloadcontrolbt.mode.disabled.multiselect" );
+			}
+			if ( TablePointerHit.DISABLE_SKIPPED.equals( disableReason )){
+				return MessageText.getString( "menu.downloadcontrolbt.mode.disabled.skipped" );
+			}
+			if ( TablePointerHit.DISABLE_EMPTY.equals( disableReason )){
+				return MessageText.getString( "menu.downloadcontrolbt.mode.disabled.empty" );
+			}
+			return MessageText.getString( enabledKey );
+		}
+
 		private void setupIPFilterOption(SWTSkinObjectContainer so) {
 			Composite parent = so.getComposite();
 
@@ -7829,6 +8069,10 @@ public class OpenTorrentOptionsWindow
 				peer_sources_layout.pack = true;
 				peer_sources_layout.spacing = 10;
 				peer_sources_group.setLayout(peer_sources_layout);
+				if ( Constants.isLinux ){
+					peer_sources_group.setBackgroundMode( SWT.INHERIT_NONE );
+					peer_sources_composite.setBackgroundMode( SWT.INHERIT_NONE );
+				}
 
 				FormData form_data = Utils.getFilledFormData();
 				form_data.bottom = null;
@@ -7911,6 +8155,10 @@ public class OpenTorrentOptionsWindow
 				network_layout.pack = true;
 				network_layout.spacing = 10;
 				network_group.setLayout(network_layout);
+				if ( Constants.isLinux ){
+					network_group.setBackgroundMode( SWT.INHERIT_NONE );
+					network_group_parent.setBackgroundMode( SWT.INHERIT_NONE );
+				}
 
 				FormData form_data = Utils.getFilledFormData();
 				form_data.top = new FormAttachment( peer_sources_composite );

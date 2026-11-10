@@ -99,6 +99,9 @@ public class TorrentOpenFileOptions
 		return( torrentOptions );
 	}
 	
+	public int getFirstPieceNumber() { return tfile.getFirstPieceNumber(); }
+	public int getLastPieceNumber() { return tfile.getLastPieceNumber(); }
+
 	public int
 	getIndex()
 	{

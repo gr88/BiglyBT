@@ -127,6 +127,7 @@ public class FilesView
 			new PiecesDoneAndCountItem(tableID),
 			new ProgressGraphItem(tableID),
 			new ModeItem(tableID),
+			new DLCModeItem(tableID),
 			new PriorityItem(tableID),
 			new StorageTypeItem(tableID),
 			new FileExtensionItem(tableID),

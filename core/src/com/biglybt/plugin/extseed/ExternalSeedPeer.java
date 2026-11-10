@@ -163,7 +163,12 @@ ExternalSeedPeer
 	bindConnection(
 		ConnectionStub		stub )
 	{
-		connection_stub	= stub;
+		connection_stub = stub;
+		// A separate limiter per HTTP peer; never a torrent/global cap.
+		// Unlike the peer-stats limit, this cannot be overwritten by max_speed.
+		if (stub != null && com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()) {
+			stub.addRateLimiter(new com.biglybt.core.downloadcontrolbt.DownloadControlBTPeerRateLimiter(), false);
+		}
 	}
 
 	protected ExternalSeedReader

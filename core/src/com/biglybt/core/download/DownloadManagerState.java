@@ -112,6 +112,16 @@ DownloadManagerState
 	
 	public static final String AT_VIEW_FILTERS				= "vfilt";			// Map
 
+	public static final String AT_DLCBT_ENABLED				= "dlcbt.enabled";	// boolean, def=false
+	public static final String AT_DLCBT_FILE_INDEX			= "dlcbt.fileidx";	// int, def=-1
+	public static final String AT_DLCBT_MODE				= "dlcbt.mode";		// int, 0=off/legacy, 1=sequential, 2=random
+	public static final String AT_DLCBT_PLAN				= "dlcbt.plan";		// String[] piece numbers
+	public static final String AT_DLCBT_PLAN_SEED			= "dlcbt.plan.seed";	// long
+	public static final String AT_DLCBT_PLAN_VER			= "dlcbt.plan.ver";	// int
+	public static final String AT_DLCBT_POLICY				= "dlcbt.policy";	// int, 0=unset, 1=auto, 2=manual, 3=off
+	public static final String AT_DLCBT_FORWARD_STARTS = "dlcbt.forward.starts"; // fileIndex=piece, persistent sequential suffix
+	public static final String AT_DLCBT_FILE_MODES			= "dlcbt.filemodes";	// String[] "index=mode" per-file overrides
+
 	
 	public static Object[][] ATTRIBUTE_DEFAULTS = {
 		{ AT_VERSION,								new Integer( -1 )},
@@ -125,6 +135,12 @@ DownloadManagerState
 		{ AT_FILE_ALLOC_STRATEGY,					new Long( FAS_DEFAULT )},
 		{ AT_FILE_ALLOC_ORDER,						new Long( -1 )},
 		{ AT_SKIPPED_FILESET_SIZE,					new Long( -1 )},
+		{ AT_DLCBT_ENABLED,							new Long( 0 )},
+		{ AT_DLCBT_FILE_INDEX,						new Integer( -1 )},
+		{ AT_DLCBT_MODE,							new Integer( 0 )},
+		{ AT_DLCBT_PLAN_SEED,						new Long( 0 )},
+		{ AT_DLCBT_PLAN_VER,						new Integer( 0 )},
+		{ AT_DLCBT_POLICY,							new Integer( 0 )},
 	};
 
 	public static final long FLAG_ONLY_EVER_SEEDED						= Download.FLAG_ONLY_EVER_SEEDED;

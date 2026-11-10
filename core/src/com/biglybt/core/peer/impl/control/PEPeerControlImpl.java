@@ -33,6 +33,11 @@ import com.biglybt.core.config.ConfigKeys;
 import com.biglybt.core.config.ParameterListener;
 import com.biglybt.core.disk.*;
 import com.biglybt.core.disk.DiskManager.DownloadEndedProgress;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTAddresses;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTBanRegistry;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTBanService;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTSpeedSampler;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.ipfilter.*;
 import com.biglybt.core.logging.*;
@@ -758,6 +763,8 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 
 		PeerControlSchedulerFactory.getSingleton(partition_id).register(this);
 
+		DownloadControlBTBanService.get().addListener(dlcbt_ban_listener);
+
 		checkAutoSequentialFiles(null);
 	}
 
@@ -766,6 +773,8 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 	stopAll()
 	{
 		is_running = false;
+
+		DownloadControlBTBanService.get().removeListener(dlcbt_ban_listener);
 
 		UploadSlotManager.getSingleton().deregisterHelper(upload_helper);
 
@@ -971,11 +980,23 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 
 				piecePicker.allocateRequests();
 
+				dlcbtRerequestCoveredPiece();
+
 				checkRescan();
 				checkSpeedAndReserved();
 
 				check99PercentBug();
 			}
+
+            if (DownloadControlBTBanService.get().isPolicyEnabled()) {
+                long nowMono = SystemTime.getMonotonousTime();
+                for (PEPeerTransport peer : peer_transports_cow) {
+                    // Same CONNECTION_* state used by Peers/StateItem. TCP connect
+                    // is CONNECTION_CONNECTING, never this trigger.
+                    DownloadControlBTBanService.get().onHandshakeTimeout(peer.getIp(),
+                        peer.getConnectionState(), peer.getConnectionEstablishedMonoTime(), nowMono);
+                }
+            }
 
 			updatePeersInSuperSeedMode();
 			doUnchokes();
@@ -983,6 +1004,8 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 			if(mainloop_loop_count % MAINLOOP_ONE_SECOND_INTERVAL == 0){
 
 				my_peer.update();
+
+				dlcbtSamplePeerSpeeds();
 			}
 
 		}catch(Throwable e){
@@ -1458,6 +1481,11 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 		if(ip_filter.isInRange(address, getDisplayName(), getTorrentHash())){
 
 			return("IPFilter block");
+		}
+
+		if(DownloadControlBTBanService.get().isTemporarilyBanned(address)){
+
+			return("DLCBT temporary ban");
 		}
 
 		String net_cat = AENetworkClassifier.categoriseAddress(address);
@@ -3075,6 +3103,7 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 	 */
 	@Override
 	public void writeBlock(int pieceNumber, int offset, DirectByteBuffer data, Object sender, boolean cancel){
+		DownloadControlBT.noteIncomingBlock(this, pieceNumber, offset);
 		final int blockNumber = offset / DiskManager.BLOCK_SIZE;
 		final DiskManagerPiece dmPiece = dm_pieces[pieceNumber];
 		if(dmPiece.isWritten(blockNumber)){
@@ -4688,7 +4717,145 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 		String			name,
 		byte[]			hash )
 	{
-		return( ip_filter.isInRange( peer.getIp(), name, hash, PeerClassifier.isHTTPSeed( peer.getClient()), true ));
+		return( ip_filter.isInRange( peer.getIp(), name, hash, PeerClassifier.isHTTPSeed( peer.getClient()), true )
+				|| DownloadControlBTBanService.get().isTemporarilyBanned( peer.getIp()));
+	}
+
+		// DLCBT temporary-ban enforcement (profile-gated inside the service)
+
+	private static final class
+	DLCBTSampleState
+	{
+		final DownloadControlBTSpeedSampler	sampler = new DownloadControlBTSpeedSampler();
+		long								last_data_bytes = -1;
+	}
+
+	private final Map<PEPeerTransport,DLCBTSampleState>	dlcbt_samples = new IdentityHashMap<>();
+
+	private final DownloadControlBTBanService.BanListener	dlcbt_ban_listener =
+		new DownloadControlBTBanService.BanListener()
+		{
+			@Override
+			public void
+			dlcbtTemporaryBan(
+				DownloadControlBTBanRegistry.Ban	ban )
+			{
+				if ( !is_running ){
+					return;
+				}
+				List<PEPeerTransport> to_close = null;
+				for ( PEPeerTransport peer: peer_transports_cow ){
+					if ( DownloadControlBTAddresses.same( peer.getIp(), ban.canonical )){
+						if ( to_close == null ){
+							to_close = new ArrayList<>();
+						}
+						to_close.add( peer );
+					}
+				}
+				if ( to_close != null ){
+					for ( PEPeerTransport peer: to_close ){
+						closeAndRemovePeer( peer, "DLCBT temporary ban (" + ban.reason + ")", Transport.CR_IP_BLOCKED, false );
+					}
+				}
+			}
+		};
+
+	private final com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest dlcbt_rerequest =
+		new com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest();
+
+	private void dlcbtRerequestCoveredPiece() {
+		int active = DownloadControlBT.getAllowedPieceNumber(this, disk_mgr);
+		PEPiece piece = active < 0 || active >= pePieces.length ? null : pePieces[active];
+		boolean covered = false;
+		if (piece != null && !piece.getDMPiece().isDone()) {
+			covered = com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest.coverage(this, disk_mgr, piece).covered;
+		}
+		if (dlcbt_rerequest.due(active, SystemTime.getMonotonousTime(), covered)) {
+			// Exactly the Pieces view's Rerequest Blocks operation: clear the
+			// outstanding marks, not received bytes or peer connections. The
+			// normal picker reissues blocks, still through the strict DLC gate.
+			for (int b=0; b<piece.getNbBlocks(); b++) {
+				if (!piece.isDownloaded(b) && !piece.isWritten(b) && piece.isRequested(b)) piece.clearRequested(b);
+			}
+		}
+	}
+
+	private void
+	dlcbtSamplePeerSpeeds()
+	{
+		DownloadControlBTBanService service = DownloadControlBTBanService.get();
+
+		if ( !service.isPolicyEnabled()){
+			if ( !dlcbt_samples.isEmpty()){
+				dlcbt_samples.clear();
+			}
+			return;
+		}
+
+			// a user-set torrent or global download cap can legitimately push
+			// every peer under the minimum, so such time is not "active" time
+
+		boolean throttled =
+			adapter.getDownloadRateLimitBytesPerSecond() != 0 ||
+			NetworkManager.getMaxDownloadRateBPS() > 0;
+
+		List<PEPeerTransport> peers = peer_transports_cow;
+
+		Set<PEPeerTransport> live = Collections.newSetFromMap( new IdentityHashMap<PEPeerTransport,Boolean>());
+
+		String torrent_tag = null;
+
+		for ( PEPeerTransport peer: peers ){
+
+			if ( peer.getPeerState() != PEPeer.TRANSFERING ){
+				continue;
+			}
+
+			String ip = peer.getIp();
+
+			if ( 	AENetworkClassifier.categoriseAddress( ip ) != AENetworkClassifier.AT_PUBLIC ||
+					PeerClassifier.isHTTPSeed( peer.getClient()) ||
+					PEPeerSource.PS_PLUGIN.equals( peer.getPeerSource()) ||
+					peer.isLANLocal()){
+				continue;
+			}
+
+			live.add( peer );
+
+			DLCBTSampleState state = dlcbt_samples.get( peer );
+
+			if ( state == null ){
+				state = new DLCBTSampleState();
+				dlcbt_samples.put( peer, state );
+			}
+
+			long bytes = peer.getStats().getTotalDataBytesReceived();
+
+			long delta = state.last_data_bytes < 0 ? 0 : bytes - state.last_data_bytes;
+
+			state.last_data_bytes = bytes;
+
+			boolean eligible =
+				!seeding_mode &&
+				!throttled &&
+				!peer.isChokingMe() &&
+				peer.getOutgoingRequestCount() > 0;
+
+			if ( torrent_tag == null ){
+				byte[] h = getTorrentHash();
+				torrent_tag = h == null ? "-" : ByteFormatter.encodeString( h ).substring( 0, 16 );
+			}
+
+			try{
+				service.onDataSample( state.sampler, ip, delta, eligible, "torrent=" + torrent_tag );
+			}catch( Throwable e ){
+				Debug.out( e );
+			}
+		}
+
+		if ( dlcbt_samples.size() > live.size()){
+			dlcbt_samples.keySet().retainAll( live );
+		}
 	}
 	
 	private int

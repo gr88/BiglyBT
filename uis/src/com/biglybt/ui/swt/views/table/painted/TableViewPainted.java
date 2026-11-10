@@ -31,6 +31,11 @@ import org.eclipse.swt.layout.*;
 import org.eclipse.swt.widgets.*;
 
 import com.biglybt.core.config.COConfigurationManager;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.TablePointerHit;
+import com.biglybt.core.logging.LogEvent;
+import com.biglybt.core.logging.LogIDs;
+import com.biglybt.core.logging.Logger;
 import com.biglybt.core.config.ParameterListener;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.internat.MessageText.MessageTextListener;
@@ -669,6 +674,17 @@ public class TableViewPainted
 							// to mark the event as 'doit=false' and prevent a visible one from processing it...
 						super.keyPressed(event);
 					}
+					return;
+				}
+				// DLCBT Peers: move focus without destroying a non-contiguous
+				// selection, then Ctrl+Space toggles the focused row.
+				if (event.stateMask == SWT.MOD1
+					&& (event.keyCode == SWT.ARROW_UP || event.keyCode == SWT.ARROW_DOWN)
+					&& getDataSourceType() == com.biglybt.pif.peers.Peer.class
+					&& com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()) {
+					TableRowCore next = event.keyCode == SWT.ARROW_UP ? getPreviousRow(focusedRow) : getNextRow(focusedRow);
+					if (next != null) setFocusedRow(next);
+					event.doit = false;
 					return;
 				}
 				boolean updateTable = false;
@@ -1391,7 +1407,8 @@ public class TableViewPainted
 		// TODO: Make work outside SWT?
 		Point pt = cTable.getDisplay().getCursorLocation();
 		pt = cTable.toControl(pt);
-		return getTableCell(pt.x, clientArea.y + pt.y);
+		// getTableCell -> getTableRow already adds clientArea.y; do not add it twice.
+		return getTableCell(pt.x, pt.y);
 	}
 
 	/* (non-Javadoc)
@@ -3568,6 +3585,46 @@ public class TableViewPainted
 		}
 	}
 
+
+	private TableRowCore
+	rowFromMenuDetectEvent(
+		Event		event )
+	{
+		if ( cTable == null || cTable.isDisposed() || event == null ){
+			return null;
+		}
+		Point pt = cTable.toControl( event.x, event.y );
+		// getTableRow adds clientArea.y once; pass control-relative y only.
+		return getTableRow( pt.x, pt.y, true );
+	}
+
+	private void
+	logMenuDetectHit(
+		Event			event,
+		TableRowCore	hit )
+	{
+		if ( !DownloadControlBT.isProfileEnabled() || !Logger.isEnabled()){
+			return;
+		}
+		TableRowCore[] selected = getSelectedRows();
+		int selIndex = selected != null && selected.length > 0 && selected[0] != null
+			? selected[0].getIndex() : -1;
+		int hitIndex = hit == null ? -1 : hit.getIndex();
+		Point control = cTable == null || cTable.isDisposed()
+			? new Point(0, 0) : cTable.toControl( event.x, event.y );
+		int caY = clientArea == null ? 0 : clientArea.y;
+		Logger.log(new LogEvent(LogIDs.GUI,
+			"DownLoadControlBT: table MenuDetect display=" + event.x + "," + event.y
+				+ " control=" + control.x + "," + control.y
+				+ " contentY=" + TablePointerHit.contentY( control.y, caY )
+				+ " clientArea.y=" + caY
+				+ " hitRow=" + hitIndex
+				+ " selectedRow=" + selIndex
+				+ " selectedCount=" + (selected == null ? 0 : selected.length)
+				+ " detail=" + event.detail
+				+ " table=" + getTableID()));
+	}
+
 	private Menu createMenu() {
 		if (!isMenuEnabled()) {
 			return null;
@@ -3587,32 +3644,31 @@ public class TableViewPainted
 					if (event.detail == SWT.MENU_KEYBOARD) {
 						noRow = getFocusedRow() == null;
 					} else {
-						TableRowCore row = getTableRowWithCursor();
+						// MenuDetect x/y are display coordinates. Use them (not
+						// getCursorLocation) so GTK, which may fire MenuDetect
+						// before MouseDown or without MouseDown on an inactive
+						// shell, hit-tests the same row the pointer is over.
+						TableRowCore row = rowFromMenuDetectEvent(event);
 						noRow = row == null;
-	
-						// If shell is not active, right clicking on a row will
-						// result in a MenuDetect, but not a MouseDown or MouseUp
-						
+
 						Long lastAS = (Long)cTable.getData( TABLEKEY_LAST_AUTOSCROLL );
-						
+
 						if ( lastAS != null && SystemTime.getMonotonousTime() - lastAS < 1000 ){
-							
-							// however, if we are right-drag-selecting with autoscroll then
-							// it is possible at the time the menu detect occurs the mouse
-							// is over a yet-to-be selected row and we don't want this code 
-							// kicking in and changing the selection
-						}else{
-						
-							if (!isSelected(row)) {
-								setSelectedRows(new TableRowCore[] { row });
-							}
+
+							// right-drag-select + autoscroll: pointer may be over
+							// a yet-to-be selected row; do not replace selection
+						}else if ( TablePointerHit.shouldReplaceSelectionFromPointer(
+								false, row != null, isSelected(row))) {
+							setSelectedRows(new TableRowCore[] { row });
 						}
+						logMenuDetectHit(event, row);
 					}
 
 					menu.setData(MENUKEY_IN_BLANK_AREA, noRow);
 					menu.setData(MENUKEY_IS_HEADER, false);
 				}
-				Point pt = cHeaderArea.toControl(event.x, event.y);
+				Composite colSrc = cHeaderArea != null ? cHeaderArea : cTable;
+				Point pt = colSrc == null ? new Point(event.x, event.y) : colSrc.toControl(event.x, event.y);
 				menu.setData(TableContextMenuItemImpl.MENUKEY_TABLE_VIEW, TableViewPainted.this );
 				menu.setData(MENUKEY_COLUMN, getTableColumnByOffset(pt.x));
 			}
