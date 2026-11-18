@@ -131,6 +131,7 @@ PeersViewBase
 				new ColumnPeerNetwork(table_id),
 				new LocalInterfaceItem(table_id),
 				new BytesQueuedForUpload(table_id),
+				new DownloadControlBTBadGoodItem(table_id),
 		};
 	}
 

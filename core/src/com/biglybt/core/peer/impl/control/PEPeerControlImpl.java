@@ -4242,6 +4242,7 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 										if(!Arrays.equals(write.getHash(), correctHash)){
 											// Bad peer found here
 											badPeerDetected(write.getSender(), pieceNumber, "Hash check failed (block)" );
+											dlcbtHashFailBan(write.getSender(), pieceNumber, "block");
 										}
 									}
 								}
@@ -4279,6 +4280,7 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 						MD5CheckPiece(pePiece, false);
 
 						final String[] writers = pePiece.getWriters();
+						dlcbtChargeBadBytes(pePiece, writers);
 						final List uniqueWriters = new ArrayList();
 						final int[] writesPerWriter = new int[writers.length];
 						for(int i = 0; i < writers.length; i++){
@@ -4307,6 +4309,7 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 							}
 
 							badPeerDetected(bad_ip, pieceNumber, "Hash fail (piece)");
+							dlcbtHashFailBan(bad_ip, pieceNumber, "piece");
 
 							// and let's reset the whole piece
 							pePiece.reset();
@@ -4406,6 +4409,36 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 			if(!seeding_mode){
 				checkFinished(false);
 			}
+		}
+	}
+
+	/** DLCBT: per-peer hash-failed bytes for the Peers %Bad/Good column. */
+	private void dlcbtChargeBadBytes(PEPieceImpl pePiece, String[] writers){
+		try{
+			if(writers == null) return;
+			for(int i = 0; i < writers.length; i++){
+				if(writers[i] == null) continue;
+				PEPeerTransport pt = getTransportFromAddress(writers[i]);
+				if(pt != null){
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTPeerBadData.addBad(pt, pePiece.getBlockSize(i));
+				}
+			}
+		}catch(Throwable e){
+			Debug.printStackTrace(e);
+		}
+	}
+
+	/**
+	 * DLCBT: any hash fail attributed to a peer gets a 3.5..4.5 min temporary
+	 * ban (reason hash-fail) in addition to, never instead of, BiglyBT's
+	 * own badPeerDetected warning / ban-after-3 rule.
+	 */
+	private void dlcbtHashFailBan(String ip, int piece_number, String kind){
+		try{
+			DownloadControlBTBanService.get().onHashFail(ip,
+				"kind=" + kind + " piece=" + piece_number);
+		}catch(Throwable e){
+			Debug.printStackTrace(e);
 		}
 	}
 

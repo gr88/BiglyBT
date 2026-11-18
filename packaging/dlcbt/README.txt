@@ -42,7 +42,10 @@ What this package will not do
   speed schedule is empty) enable the DownLoadControlBT profile: new
   torrents added through the always-shown Open Torrent Options dialog
   default to Force Started and the strict one-file-at-a-time queue with
-  Random interiors (there is no separate Auto file queue switch).
+  Sequential (S) as the default piece mode for every file (choose R per
+  file; multi-select works in the add dialog; no separate Auto file queue
+  switch). User Proficiency defaults to Advanced when unset. The status
+  bar and Help > About show DownLoadControlBT<version> from version.txt.
   Off in that dialog disables all experimental gates. Regular ~/.biglybt
   is never written. I2P/Tor network checkboxes default on here; this
   package does not install I2P or Tor plugins and does not provide
@@ -157,6 +160,12 @@ with that address is closed on all torrents.
   measured (a cap could push every peer under 10k).
 - Handshake: Waiting for Handshake for >3 seconds (not TCP Connecting)
   gets the same temporary ban.
+- Hash fail: any hash fail attributed to a peer bans that exact address
+  for a random 3.5-4.5 minutes (reason hash-fail), in addition to
+  BiglyBT's own ban after the 3rd hash fail. The Peers "%Bad/Good"
+  column shows hash-failed bytes / good bytes per peer.
+- Connecting: outgoing peers stuck in Connecting about 30 s are
+  disconnected (never banned).
 - Duplicates: the 3rd rejected incoming duplicate connection from the
   same address on the same torrent within 60 s bans it. Different
   torrents do not add up; outgoing dials are never counted.

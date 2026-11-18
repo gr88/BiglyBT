@@ -83,7 +83,7 @@ public class AboutWindow {
     Utils.setShellIcon(window);
     final Display display = window.getDisplay();
 
-    window.setText(MessageText.getString("MainWindow.about.title") + " " + Constants.getCurrentVersion());
+    window.setText(MessageText.getString("MainWindow.about.title") + " " + com.biglybt.core.downloadcontrolbt.DownloadControlBTVersion.displayVersionOr(Constants.getCurrentVersion()));
     GridData gridData;
     window.setLayout(new GridLayout(2, false));
 
@@ -171,7 +171,8 @@ public class AboutWindow {
 
     String about_text =
 
-    		"Java " + System.getProperty("java.version") + " (" + (Constants.is64Bit?64:32) + " bit)\n  "
+    		(com.biglybt.core.downloadcontrolbt.DownloadControlBTVersion.displayVersion() == null ? "" : com.biglybt.core.downloadcontrolbt.DownloadControlBTVersion.displayVersion() + "\n")
+    		+ "Java " + System.getProperty("java.version") + " (" + (Constants.is64Bit?64:32) + " bit)\n  "
     				+ System.getProperty("java.vendor") + "\n"
     				+ System.getProperty("java.home") + "\n\n"
     				+ "SWT v" + Utils.getSWTVersionAndRevision() + ", " + SWT.getPlatform() + swt + "\n"

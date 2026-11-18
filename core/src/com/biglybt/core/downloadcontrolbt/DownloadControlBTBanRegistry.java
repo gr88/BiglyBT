@@ -168,4 +168,21 @@ public final class DownloadControlBTBanRegistry
 		int picked = minMinutes + ( span == 0 ? 0 : random.nextInt( span + 1 ));
 		return picked * 60L * 1000L;
 	}
+
+	/** Uniform duration in [minMs, maxMs] milliseconds (DLCBT hash-fail bans). */
+	public static long
+	randomDurationRangeMs(
+		long		minMs,
+		long		maxMs,
+		Random		random )
+	{
+		if ( minMs <= 0 || maxMs < minMs ){
+			throw new IllegalArgumentException( "duration range" );
+		}
+		long span = maxMs - minMs;
+		if ( span == 0 ){
+			return minMs;
+		}
+		return minMs + (long)( random.nextDouble() * ( span + 1 ));
+	}
 }

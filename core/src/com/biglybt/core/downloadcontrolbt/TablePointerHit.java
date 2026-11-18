@@ -85,6 +85,40 @@ public final class TablePointerHit
 	}
 
 	/**
+	 * Open Torrent Options variant (DLCBT Nov 18): multi-select is allowed,
+	 * the choice applies to every selected nonempty file. Disabled only when
+	 * nothing is selected or every selected file is empty. Unchecked files are
+	 * fine because choosing S/R also checks them.
+	 */
+	public static String addDialogModeDisableReason(
+		int		selectedCount,
+		int		nonEmptyCount )
+	{
+		if ( selectedCount <= 0 || nonEmptyCount <= 0 ){
+			return DISABLE_EMPTY;
+		}
+		return null;
+	}
+
+	/**
+	 * Radio state for a selection: the shared mode when every selected
+	 * nonempty file resolves to the same mode, else 0 (no radio checked).
+	 */
+	public static int commonMode( int[] modes )
+	{
+		if ( modes == null || modes.length == 0 ){
+			return 0;
+		}
+		int first = modes[0];
+		for ( int m : modes ){
+			if ( m != first ){
+				return 0;
+			}
+		}
+		return first;
+	}
+
+	/**
 	 * True when {@code mouseX} (same control-relative space as SWT MouseEvent)
 	 * sits within {@code slop} pixels of any column divider. {@code scrollX}
 	 * is the painted table's horizontal scroll origin ({@code clientArea.x}).

@@ -6674,18 +6674,27 @@ public class OpenTorrentOptionsWindow
 					
 					itemPriority.setEnabled( !allPriorityAuto || DownloadControlBT.isProfileEnabled());
 
-					boolean dlc_single = infos.length == 1;
-					int dlc_index = dlc_single ? infos[0].getIndex() : -1;
-					boolean dlc_empty = dlc_single && infos[0].getSize() <= 0;
-					// S / R on an unchecked file also checks it for download
-					String dlc_disable = TablePointerHit.modeOverrideDisableReason(
-						!dlc_single, false, dlc_empty );
-					boolean dlc_usable = dlc_disable == null;
-					int dlc_file_mode = dlc_single ? torrentOptions.getDlcbtFileMode(dlc_index) : 0;
-					boolean dlc_off = torrentOptions.isDlcbtExplicitOff();
-					if ( !dlc_off && dlc_single && dlc_file_mode == 0 && torrentOptions.isDlcbtAutoQueue()){
-						dlc_file_mode = DownloadControlBT.MODE_RANDOM;
+					// DLCBT Nov 18: S / R apply to every selected nonempty file
+					// (multi-select allowed); unchecked files are checked too.
+					final java.util.List<TorrentOpenFileOptions> dlc_targets = new java.util.ArrayList<>();
+					for ( TorrentOpenFileOptions dlcInfo : infos ){
+						if ( dlcInfo.getSize() > 0 ){
+							dlc_targets.add( dlcInfo );
+						}
 					}
+					String dlc_disable = TablePointerHit.addDialogModeDisableReason(
+						infos.length, dlc_targets.size());
+					boolean dlc_usable = dlc_disable == null;
+					boolean dlc_off = torrentOptions.isDlcbtExplicitOff();
+					int[] dlc_modes = new int[dlc_targets.size()];
+					for ( int i = 0; i < dlc_modes.length; i++ ){
+						int m = torrentOptions.getDlcbtFileMode( dlc_targets.get( i ).getIndex());
+						if ( m == 0 && torrentOptions.isDlcbtAutoQueue()){
+							m = DownloadControlBT.MODE_SEQUENTIAL;
+						}
+						dlc_modes[i] = m;
+					}
+					int dlc_file_mode = dlc_off ? 0 : TablePointerHit.commonMode( dlc_modes );
 
 					final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
 					Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
@@ -6716,11 +6725,7 @@ public class OpenTorrentOptionsWindow
 						"menu.downloadcontrolbt.sequential.tooltip" ));
 					itemDLCSequential.addListener(SWT.Selection, event -> {
 						if (itemDLCSequential.getSelection() && dlc_usable) {
-							if (!infos[0].isToDownload()) {
-								setToDownload(infos, true);
-							}
-							torrentOptions.setDlcbtAutoQueue(true);
-							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_SEQUENTIAL);
+							dlcApplyMode( dlc_targets, DownloadControlBT.MODE_SEQUENTIAL );
 							refreshDLCFileColumn();
 						}
 					});
@@ -6735,11 +6740,7 @@ public class OpenTorrentOptionsWindow
 						"menu.downloadcontrolbt.random.tooltip" ));
 					itemDLCRandom.addListener(SWT.Selection, event -> {
 						if (itemDLCRandom.getSelection() && dlc_usable) {
-							if (!infos[0].isToDownload()) {
-								setToDownload(infos, true);
-							}
-							torrentOptions.setDlcbtAutoQueue(true);
-							torrentOptions.setDlcbtFileMode(dlc_index, DownloadControlBT.MODE_RANDOM);
+							dlcApplyMode( dlc_targets, DownloadControlBT.MODE_RANDOM );
 							refreshDLCFileColumn();
 						}
 					});
@@ -7983,6 +7984,27 @@ public class OpenTorrentOptionsWindow
 			sep2.setLayoutData(gridData);
 		}
 
+
+		private void dlcApplyMode(
+			java.util.List<TorrentOpenFileOptions>	targets,
+			int										mode )
+		{
+			java.util.List<TorrentOpenFileOptions> unchecked = new java.util.ArrayList<>();
+			for ( TorrentOpenFileOptions t : targets ){
+				if ( !t.isToDownload()){
+					unchecked.add( t );
+				}
+			}
+			if ( !unchecked.isEmpty()){
+				setToDownload( unchecked.toArray( new TorrentOpenFileOptions[0] ), true );
+			}
+			torrentOptions.setDlcbtExplicitOff( false );
+			torrentOptions.setDlcbtAutoQueue( true );
+			for ( TorrentOpenFileOptions t : targets ){
+				torrentOptions.setDlcbtFileMode( t.getIndex(), mode );
+			}
+			refreshDLCFileColumn();
+		}
 
 		private void refreshDLCFileColumn() {
 			if ( tvFiles != null ){

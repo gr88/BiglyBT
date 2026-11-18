@@ -238,10 +238,9 @@ public final class DownloadControlFileQueue
 			|| fileOverrideMode == DownloadControlStrictOrder.MODE_RANDOM ){
 			return fileOverrideMode;
 		}
-		if ( torrentDefaultMode == DownloadControlStrictOrder.MODE_SEQUENTIAL ){
-			return DownloadControlStrictOrder.MODE_SEQUENTIAL;
-		}
-		return DownloadControlStrictOrder.MODE_RANDOM;
+		// DLCBT Nov 18: every file without its own stored S/R override is
+		// Sequential, whatever the (auto-written) torrent default says.
+		return DownloadControlStrictOrder.MODE_SEQUENTIAL;
 	}
 
 	public static String
@@ -268,8 +267,8 @@ public final class DownloadControlFileQueue
 
 	/**
 	 * Add-dialog letter for a pending file: S/R from a stored override,
-	 * R for every nonempty file when auto queue is on (default
-	 * Random), blank when Off or empty, even if unchecked. Mirrors
+	 * S for every nonempty file when auto queue is on (default
+	 * Sequential), blank when Off or empty, even if unchecked. Mirrors
 	 * {@link #modeLetterForFile} for not-yet-added torrents.
 	 */
 	public static String
@@ -289,7 +288,7 @@ public final class DownloadControlFileQueue
 			return "R";
 		}
 		if ( autoQueue ){
-			return DownloadControlStrictOrder.modeLetter( DownloadControlStrictOrder.MODE_RANDOM );
+			return DownloadControlStrictOrder.modeLetter( DownloadControlStrictOrder.MODE_SEQUENTIAL );
 		}
 		return "";
 	}
@@ -425,13 +424,13 @@ public final class DownloadControlFileQueue
 		if ( autoQueue ){
 			int pick = pickPinnedOrNext( files, -1, verified );
 			int mode = pick < 0
-				? DownloadControlStrictOrder.MODE_RANDOM
+				? DownloadControlStrictOrder.MODE_SEQUENTIAL
 				: effectiveFileMode(
-					DownloadControlStrictOrder.MODE_RANDOM,
+					DownloadControlStrictOrder.MODE_SEQUENTIAL,
 					fileModeOverride( fileModes, pick ));
 			return new NewTorrentDecision(
 				POLICY_AUTO,
-				DownloadControlStrictOrder.MODE_RANDOM,
+				DownloadControlStrictOrder.MODE_SEQUENTIAL,
 				pick,
 				mode );
 		}

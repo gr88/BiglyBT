@@ -36,6 +36,46 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## 2026-11-18 — Sequential default, multi-select modes, version display, connecting kick, hash-fail bans, %Bad/Good
+
+- **Default piece mode is now S (Sequential)** for every file without its
+  own stored S/R override (new torrents and unset files). Stored per-file
+  modes are kept. The auto-written torrent default no longer forces R.
+  Log: "auto file queue enabled; default piece mode Sequential (S) unless
+  a file override is set".
+- **Open Torrent Options**: Experimental DLC S/R are enabled for
+  multi-select and apply to every selected nonempty file; unchecked
+  files are checked too. Disabled only when every selected file is empty.
+- **Displayed version**: status bar and Help > About show
+  `DownLoadControlBT<version>` read from the package's version.txt
+  (beside LICENSE, via azureus.install.path). `Constants.BIGLYBT_VERSION`
+  (protocol, plugins, peer client id) is unchanged; outside a package the
+  upstream text is shown.
+- **User Proficiency** defaults to Advanced ("User Mode"=2) in the
+  isolated profile, only when unset. BiglyBT's first-run checker always
+  writes Beginner (0) itself, so a one-shot flag
+  (`dlcbt.usermode.advanced.v1`) treats a missing key or that auto 0 as
+  unset; Intermediate/Advanced or any later change is kept.
+- **Connecting kick (~30 s)**: outgoing peers in Connecting for 30 s are
+  disconnected (not banned). Upstream's 15 s TCP CONNECT_ATTEMPT_TIMEOUT
+  only covers the raw socket connect after the queue; a peer stays
+  Connecting through MSE/PHE crypto negotiation and plain fallback
+  reconnect, uTP/UDP (20 s connect, handled separately), the TCP+uTP
+  dual attempt and proxied (SOCKS/I2P/Tor) connects; upstream's only
+  catch-all is 2 minutes. Checked every 5 s, so kicks land at 30–35 s.
+  The Waiting-for-Handshake >3 s ban is unchanged.
+- **Hash-fail ban**: any hash fail BiglyBT attributes to a peer (single
+  writer of a failed piece, or a block later proven bad) also gets a DLCBT
+  temporary ban, reason `hash-fail`, random 3.5–4.5 min (210–270 s),
+  exact address, in memory, all torrents. An address already banned keeps
+  its existing ban. BiglyBT's own rule (IP-filter ban after the 3rd hash
+  fail, discard-ratio disconnect) is unchanged. `dlcbt.ban.enabled=false`
+  disables it too.
+- **Peers "%Bad/Good" column** (visible by default in DLCBT): hash-failed
+  bytes from the peer / good bytes received from it. Every writer of a
+  failed piece is charged the bytes of the blocks it wrote. Per
+  connection, in memory.
+
 ## 2026-11-10 — Per-peer limits, automatic rerequest, file-priority boundaries
 
 Source changes below are **not GUI-verified on the reporting desktop**.

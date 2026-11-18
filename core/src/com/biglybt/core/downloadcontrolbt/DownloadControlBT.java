@@ -415,7 +415,7 @@ public final class DownloadControlBT
 			if ( policy == POLICY_AUTO ){
 				int stored = getStoredMode( dm );
 				if ( stored != MODE_SEQUENTIAL && stored != MODE_RANDOM ){
-					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_SEQUENTIAL );
 				}
 				setFileModeOverride( dm, fileIndex, mode );
 			}else{
@@ -507,13 +507,13 @@ public final class DownloadControlBT
 					setFileModeOverride( dm, previousFile, previousMode );
 				}
 				if ( getStoredMode( dm ) != MODE_SEQUENTIAL && getStoredMode( dm ) != MODE_RANDOM ){
-					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+					state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_SEQUENTIAL );
 				}
 				state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_AUTO );
 				state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
 			}
 			refreshAutoActiveFile( dm, dm.getDiskManager());
-			log( dm, "auto file queue enabled; default piece mode Random unless a file override is set" );
+			log( dm, "auto file queue enabled; default piece mode Sequential (S) unless a file override is set" );
 			return;
 		}
 		if ( getPolicy( dm ) == POLICY_AUTO ){
@@ -912,7 +912,7 @@ public final class DownloadControlBT
 			synchronized( state ){
 				state.setIntAttribute( DownloadManagerState.AT_DLCBT_POLICY, POLICY_AUTO );
 				state.setBooleanAttribute( DownloadManagerState.AT_DLCBT_ENABLED, true );
-				state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_RANDOM );
+				state.setIntAttribute( DownloadManagerState.AT_DLCBT_MODE, MODE_SEQUENTIAL );
 			}
 			if ( decision.initialFileIndex >= 0 ){
 				activateFile(

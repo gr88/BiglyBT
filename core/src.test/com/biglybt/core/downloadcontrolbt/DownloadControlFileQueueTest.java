@@ -198,7 +198,7 @@ public class DownloadControlFileQueueTest
 			0, 2, DownloadControlStrictOrder.MODE_SEQUENTIAL, false )).isEqualTo( "S" );
 		assertThat( DownloadControlFileQueue.modeLetterForFile(
 			DownloadControlFileQueue.POLICY_AUTO, true, DownloadControlStrictOrder.MODE_RANDOM,
-			0, 3, DownloadControlStrictOrder.MODE_OFF, false )).isEqualTo( "R" );
+			0, 3, DownloadControlStrictOrder.MODE_OFF, false )).isEqualTo( "S" );
 		assertThat( DownloadControlFileQueue.modeLetterForFile(
 			DownloadControlFileQueue.POLICY_AUTO, true, DownloadControlStrictOrder.MODE_RANDOM,
 			0, 4, DownloadControlStrictOrder.MODE_RANDOM, true )).isEmpty();
@@ -220,7 +220,7 @@ public class DownloadControlFileQueueTest
 		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
 			false, false, DownloadControlStrictOrder.MODE_OFF, false )).isEmpty();
 		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
-			false, true, DownloadControlStrictOrder.MODE_OFF, false )).isEqualTo( "R" );
+			false, true, DownloadControlStrictOrder.MODE_OFF, false )).isEqualTo( "S" );
 		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
 			false, true, DownloadControlStrictOrder.MODE_SEQUENTIAL, false )).isEqualTo( "S" );
 		assertThat( DownloadControlFileQueue.modeLetterForPendingFile(
@@ -251,9 +251,9 @@ public class DownloadControlFileQueueTest
 			DownloadControlFileQueue.planNewTorrent(
 				files, true, false, false, true, modes, new Verified());
 		assertThat( auto.policy ).isEqualTo( DownloadControlFileQueue.POLICY_AUTO );
-		assertThat( auto.torrentDefaultMode ).isEqualTo( DownloadControlStrictOrder.MODE_RANDOM );
+		assertThat( auto.torrentDefaultMode ).isEqualTo( DownloadControlStrictOrder.MODE_SEQUENTIAL );
 		assertThat( auto.initialFileIndex ).isEqualTo( 1 );
-		assertThat( auto.initialFileMode ).isEqualTo( DownloadControlStrictOrder.MODE_RANDOM );
+		assertThat( auto.initialFileMode ).isEqualTo( DownloadControlStrictOrder.MODE_SEQUENTIAL );
 
 		DownloadControlFileQueue.NewTorrentDecision manual =
 			DownloadControlFileQueue.planNewTorrent(

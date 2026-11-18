@@ -22,6 +22,10 @@ public final class DownloadControlBTBanService
 	public static final String REASON_SPEED_LOW = "speed-low";
 	public static final String REASON_SPEED_HIGH = "speed-high";
 	public static final String REASON_DUPLICATE = "duplicate-incoming";
+	public static final String REASON_HASH_FAIL = "hash-fail";
+	/** Hash-fail ban: random 3.5 .. 4.5 minutes, separate from the 54-64 min policy. */
+	public static final long HASH_FAIL_MIN_MS = 210 * 1000L;
+	public static final long HASH_FAIL_MAX_MS = 270 * 1000L;
 
 	public static final String CFG_ENABLED = "dlcbt.ban.enabled";
 	public static final String CFG_MIN_MINUTES = "dlcbt.ban.duration.min.minutes";
@@ -189,6 +193,30 @@ public final class DownloadControlBTBanService
 		}
 		fire(ban);
 		return ban;
+	}
+
+	/**
+	 * DLCBT Nov 18: any hash fail attributed to a peer gives an exact-address,
+	 * in-memory, all-torrent temporary ban of 3.5 .. 4.5 minutes. BiglyBT's own
+	 * hash-fail warnings / IP filter ban and discard-ratio disconnect are
+	 * untouched. Disabled with dlcbt.ban.enabled=false (or DLCBT profile off).
+	 * An address already banned keeps its existing (possibly longer) ban.
+	 */
+	public DownloadControlBTBanRegistry.Ban onHashFail(String address, String detail) {
+		if (!isPolicyEnabled() || address == null || address.isEmpty()) return null;
+		DownloadControlBTBanRegistry.Ban ban;
+		synchronized (this) {
+			long now = System.currentTimeMillis();
+			if (registry.isBanned(address, now)) return null;
+			ban = registry.ban(address, now, hashFailDurationMs(random), REASON_HASH_FAIL, detail);
+			if (ban != null) logBan(ban);
+		}
+		fire(ban);
+		return ban;
+	}
+
+	public static long hashFailDurationMs(Random random) {
+		return DownloadControlBTBanRegistry.randomDurationRangeMs(HASH_FAIL_MIN_MS, HASH_FAIL_MAX_MS, random);
 	}
 
 	public static boolean handshakeOverdue(int state, long establishedMono, long nowMono) {

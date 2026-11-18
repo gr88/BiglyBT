@@ -2637,6 +2637,16 @@ implements PEPeerTransport
 				
 				return true;
 			}
+
+			// DLCBT: kick (not ban) outgoing peers stuck Connecting ~30 s
+			if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.shouldKick(
+					com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled(),
+					isIncoming(), true, outbound_connection_start, mono_now )){
+
+				closeConnectionInternally( "DLCBT: connecting timeout (30s), kicked not banned", Transport.CR_TIMEOUT, false, true );
+
+				return true;
+			}
 			
 			if ( connection != null ){
 				

@@ -90,6 +90,18 @@ public final class InitIsolatedConfig
 		setIfUnset("LibraryCD.viewmode", 1);
 		setIfUnset("LibraryUnopened.viewmode", 1);
 		setIfUnset("Library.ShowTabsInTorrentView", 1);
+		// DLCBT Nov 18: Tools > Options > Mode > User Proficiency = Advanced.
+		// BiglyBT's first-run ConfigurationChecker always writes "User Mode"=0
+		// (Beginner), so "unset" means the key is missing or still holds that
+		// auto-written 0 and this one-shot flag has not run yet. A choice of
+		// Intermediate/Advanced, or any later change, is kept.
+		if (!COConfigurationManager.hasParameter("dlcbt.usermode.advanced.v1", true)) {
+			if (!COConfigurationManager.hasParameter("User Mode", true)
+					|| COConfigurationManager.getIntParameter("User Mode") == 0) {
+				COConfigurationManager.setParameter("User Mode", 2);
+			}
+			COConfigurationManager.setParameter("dlcbt.usermode.advanced.v1", true);
+		}
 
 		// One-shot: expand all Open Torrent Options sections on a fresh
 		// isolated profile (and once for testers who inherited the previous
@@ -169,6 +181,7 @@ public final class InitIsolatedConfig
 		System.out.println("upload.max.kbs=" + COConfigurationManager.getIntParameter("Max Upload Speed KBs"));
 		System.out.println("schedule.up=" + DownloadControlBTDefaults.SCHEDULE_UP);
 		System.out.println("schedule.down=" + DownloadControlBTDefaults.SCHEDULE_DOWN);
+		System.out.println("user.mode=" + COConfigurationManager.getIntParameter("User Mode"));
 	}
 
 	private static void setIfUnset(String key, boolean value)
