@@ -478,8 +478,13 @@ public class SideBarEntrySWT
 
 				SWTSkinObject skinObject = skin.createSkinObject(id, skinRef,
 						soContents, getDatasourceCore());
-
+				if (skinObject == null) {
+					return false;
+				}
 				control = skinObject.getControl();
+				if (control == null) {
+					return false;
+				}
 				control.setLayoutData(Utils.getFilledFormData());
 				control.getParent().layout(true, true);
 				setPluginSkinObject(skinObject);

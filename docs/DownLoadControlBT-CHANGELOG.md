@@ -36,6 +36,88 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## 2026-11-20 — Defaults, sticky listen ports, restart lock, idle-peer ban, rarest-only upload, NAT test, table autofit, sidebar percent
+
+- **Isolated defaults** (setIfUnset / one-shot flags only, so later user
+  changes stick): max upload slots per torrent 80, with the seeding
+  alternate checked at 80; max connections per torrent 200, seeding
+  alternate 200; global connections 500; "Increase download speeds by
+  biasing upload capacity to incomplete downloads" unchecked; UPnP and
+  NAT-PMP off (`Plugin.UPnP.upnp.enable` / `Plugin.UPnP.natpmp.enable`);
+  DHT, PEX, and trackers left on; global speeds stay 0; "Re-check pieces
+  when download is done" and "Hide padding files" unchecked; "Require
+  encrypted transport" checked.
+- **Open Torrent Options Files** one-shot wider Name (420), Size (110),
+  Priority (90), and Path (420) columns (`dlcbt.oto.column.widths.v1`).
+- **Library completed table**: one-shot widen-to-fit the window, leftover
+  to Name, and "Done w/DND" visible by default
+  (`dlcbt.library.complete.columns.v1`).
+- **Automatic "Size Column to Fit"** on every table about every 6 minutes
+  (default 360 s). Configurable in seconds, 0 = off, on the new
+  DownLoadControlBT Options page (`dlcbt.table.autofit.seconds`).
+- **View > All Peers** is opened once on first start
+  (`dlcbt.allpeers.visible.v1`); closing it later is kept.
+- **Idle-peer ban**, including while seeding: once Fully Established, a
+  peer with no data in and no data out for more than about 5 seconds gets
+  the existing 54–64 minute DLCBT ban (reason `idle-peer`). Honours
+  `dlcbt.ban.enabled`. A recent rarest-only reject in that window
+  suppresses the idle ban so hidden non-rarest pieces are not treated as
+  idleness.
+- **NAT/firewall test** runs automatically after the sidebar is up (not
+  during `--init-only`). If both TCP and UDP return an explicit failure,
+  a popup asks for the forwarded port and writes it to TCP, UDP, and
+  UDP.NonData listen ports, then sets the listen-ports one-shot flag.
+  A mere "unable to test" does not pop up, and startup is never blocked.
+- **Sticky listen ports**: `InitIsolatedConfig` writes 26981 only when
+  the one-shot flag `dlcbt.listen.ports.v1` is missing. The launcher
+  `listen:` line prints the real `tcp.listen` / `udp.listen` values.
+- **Restart robustness**: the in-app restarter waiter waits up to 150 s,
+  logs clear "waiting" and "gave up" lines to `data/logs/restart-child.log`,
+  and is started with `setsid`. `start-dlcbt.sh` also waits up to 150 s
+  for a previous pid/port and for a real `flock` on `data/dlcbt.lock`
+  (held on FD 9 for the whole time java runs). The pid file is removed
+  only if it still holds this wrapper's own pid.
+- **HDMI / dpiChanged**: the launcher sets `GDK_SCALE=1` when compact
+  scaling is on and the variable is unset (keeps `-Dswt.autoScale=100`,
+  leaves an already-set `GDK_SCALE` or `--no-compact` alone).
+  `Text.computeSize` and `SideBarEntrySWT.swt_build` are guarded so a
+  null message or null skinObject from a dpiChanged relayout does not
+  abort Options pages. `--legacy-swt` is unchanged.
+- **Rarest-only upload** (`dlcbt.upload.rarestonly`, default on, checkbox
+  on the DownLoadControlBT Options page): per file, availability includes
+  our own copy, first and last pieces of each file are always exempt
+  (this also covers a piece that spans two files). Applies while
+  downloading and while seeding. Only pieces at that file's current
+  lowest availability among the pieces we have may be sent. Non-rarest
+  pieces are omitted from bitfield and Have announcements; requests for
+  them are rejected, including a re-check of queued requests before the
+  disk read. Super-seeding is limited to allowed pieces. When a file's
+  minimum rises, a periodic tick sends Have for newly allowed pieces. A
+  peer that keeps asking only for non-rarest pieces is disconnected after
+  8 rejects, with no ban.
+- **Sidebar percent tag**: MeasureItem always requests the full client
+  width (as Windows already did) so the right-edge percent is not clipped
+  on GTK, plus a one-shot redraw after the first layout.
+
+### Verified in this increment (automated)
+
+- Full Maven core + UI reactor on Temurin 17: 180 tests, zero
+  failures/errors/skips (106 DLCBT tests, 8 new in
+  `DownloadControlBTNov20Test`): rarest-only min / boundary / spanning
+  pieces, idle-ban timing and rarest-reject exemption, listen-port
+  one-shot survival, MeasureItem full-width rule, autofit 0 = off,
+  hash-fail duration range.
+
+### Not verified in this increment
+
+- GUI behaviour was not exercised on a desktop session (Options page,
+  All Peers, column widths, autofit timer, NAT popup, sidebar percent,
+  HDMI unplug).
+- No live BitTorrent / public-swarm test of idle-peer ban or rarest-only
+  announce / reject / super-seeding / disconnect.
+- File > Restart was not clicked in a live GUI.
+- Upstream BiglyBT v4.2.0.0 was not merged.
+
 ## 2026-11-18 — Sequential default, multi-select modes, version display, connecting kick, hash-fail bans, %Bad/Good
 
 - **Default piece mode is now S (Sequential)** for every file without its

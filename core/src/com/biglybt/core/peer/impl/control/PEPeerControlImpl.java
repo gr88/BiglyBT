@@ -995,9 +995,26 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
                     // is CONNECTION_CONNECTING, never this trigger.
                     DownloadControlBTBanService.get().onHandshakeTimeout(peer.getIp(),
                         peer.getConnectionState(), peer.getConnectionEstablishedMonoTime(), nowMono);
+                    if (peer instanceof com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol) {
+                        com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol ptp =
+                            (com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol) peer;
+                        if (com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.shouldBan(
+                                true,
+                                peer.getConnectionState(),
+                                peer.getConnectionEstablishedMonoTime(),
+                                ptp.dlcbtLastDataActivityMono(),
+                                nowMono,
+                                ptp.dlcbtHasRecentRarestReject(nowMono,
+                                    com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.IDLE_MS))) {
+                            DownloadControlBTBanService.get().onIdlePeer(peer.getIp(),
+                                "idleMs=" + (nowMono - Math.max(ptp.dlcbtLastDataActivityMono(),
+                                    peer.getConnectionEstablishedMonoTime())));
+                        }
+                    }
                 }
             }
 
+			dlcbtAnnounceNewlyAllowed();
 			updatePeersInSuperSeedMode();
 			doUnchokes();
 
@@ -4796,6 +4813,30 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 	private final com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest dlcbt_rerequest =
 		new com.biglybt.core.downloadcontrolbt.DownloadControlBTRerequest();
 
+	private boolean[] dlcbt_rarest_announced;
+
+	private void dlcbtAnnounceNewlyAllowed() {
+		try{
+			if (!com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.isEnabled()
+					|| disk_mgr == null) return;
+			com.biglybt.core.disk.DiskManagerPiece[] pieces = disk_mgr.getPieces();
+			if (pieces == null) return;
+			if (dlcbt_rarest_announced == null || dlcbt_rarest_announced.length != pieces.length) {
+				dlcbt_rarest_announced = new boolean[pieces.length];
+			}
+			for (int i = 0; i < pieces.length; i++) {
+				if (!pieces[i].isDone()) continue;
+				boolean allow = com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.mayAnnounce(this, i);
+				if (allow && !dlcbt_rarest_announced[i]) {
+					dlcbt_rarest_announced[i] = true;
+					sendHave(i);
+				}
+			}
+		}catch(Throwable t){
+			Debug.printStackTrace(t);
+		}
+	}
+
 	private void dlcbtRerequestCoveredPiece() {
 		int active = DownloadControlBT.getAllowedPieceNumber(this, disk_mgr);
 		PEPiece piece = active < 0 || active >= pePieces.length ? null : pePieces[active];
@@ -5092,7 +5133,8 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
 
 		while( true ){
 			piece = superSeedPieces[superSeedModeCurrentPiece];
-			if ( piece.getLevel() > 0 || superSeedModeCurrentPiece == hidden_piece ){
+			if ( piece.getLevel() > 0 || superSeedModeCurrentPiece == hidden_piece
+					|| !com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.mayAnnounce( this, superSeedModeCurrentPiece )){
 				piece = null;
 				superSeedModeCurrentPiece++;
 				if(superSeedModeCurrentPiece >= _nbPieces){

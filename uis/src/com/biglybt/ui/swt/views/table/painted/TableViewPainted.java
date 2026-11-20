@@ -1724,6 +1724,7 @@ public class TableViewPainted
 	@Override
 	public void initialize(UISWTView parentView, Composite parent) {
 		tvTabsCommon = new TableViewSWT_TabsCommon(parentView,this);
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTTableAutoFit.register( this );
 
 		shell = parent.getShell();
 		mainComposite = tvTabsCommon.createSashForm(parent);
@@ -3536,6 +3537,7 @@ public class TableViewPainted
 
 	@Override
 	public void delete() {
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTTableAutoFit.unregister( this );
 		destroying = true;
 		triggerLifeCycleListener(TableLifeCycleListener.EVENT_TABLELIFECYCLE_DESTROYED);
 

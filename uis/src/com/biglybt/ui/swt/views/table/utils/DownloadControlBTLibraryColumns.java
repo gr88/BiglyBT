@@ -50,6 +50,9 @@ public final class DownloadControlBTLibraryColumns
 				if ( DownloadControlBTDefaults.isHiddenDefaultLibraryColumn( id ) || "dlcbt.torrent".equals(id)){
 					tc.setVisible( false );
 				}
+				if ( !incomplete && "donewithdnd".equals( id )){
+					tc.setVisible( true );
+				}
 
 			}
 			TableColumnManager.getInstance().saveTableColumns( dataSourceType, tableID );

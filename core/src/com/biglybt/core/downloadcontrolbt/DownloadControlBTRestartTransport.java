@@ -19,8 +19,8 @@ import java.lang.ProcessBuilder.Redirect;
  */
 public final class DownloadControlBTRestartTransport
 {
-	public static final int PARENT_WAIT_STEPS = 50;
-	public static final String PARENT_WAIT_SLEEP = "0.2";
+	public static final int PARENT_WAIT_STEPS = 150;
+	public static final String PARENT_WAIT_SLEEP = "1";
 
 	private DownloadControlBTRestartTransport()
 	{
@@ -33,11 +33,18 @@ public final class DownloadControlBTRestartTransport
 	public static String waiterScript()
 	{
 		return "oldpid=\"$1\"; script=\"$2\"; "
-			+ "i=0; while [ \"$i\" -lt " + PARENT_WAIT_STEPS + " ]; do "
+			+ "i=0; waiting=0; "
+			+ "while [ \"$i\" -lt " + PARENT_WAIT_STEPS + " ]; do "
 			+ "if [ -n \"$oldpid\" ] && kill -0 \"$oldpid\" 2>/dev/null; then "
-			+ "i=$((i+1)); sleep " + PARENT_WAIT_SLEEP + "; "
-			+ "else break; fi; "
+			+ "i=$((i+1)); "
+			+ "if [ \"$i\" -eq 1 ] || [ $((i % 10)) -eq 0 ]; then "
+			+ "echo \"waiting for old DownLoadControlBT process $oldpid (${i}s)...\"; fi; "
+			+ "sleep " + PARENT_WAIT_SLEEP + "; "
+			+ "else waiting=1; break; fi; "
 			+ "done; "
+			+ "if [ -n \"$oldpid\" ] && kill -0 \"$oldpid\" 2>/dev/null; then "
+			+ "echo \"gave up waiting for old DownLoadControlBT process $oldpid after " + PARENT_WAIT_STEPS + "s\"; "
+			+ "exit 1; fi; "
 			+ "exec \"$script\"";
 	}
 
@@ -56,11 +63,18 @@ public final class DownloadControlBTRestartTransport
 		if ( logParent != null ){
 			logParent.mkdirs();
 		}
-		ProcessBuilder pb = new ProcessBuilder(
-			"bash", "-c", waiterScript(),
-			"dlcbt-restart",
-			parentPid > 0 ? Long.toString( parentPid ) : "",
-			script.getAbsolutePath());
+		java.util.List<String> cmd = new java.util.ArrayList<>();
+		// Start a new session so a closed terminal does not kill the relaunch.
+		if ( new File( "/usr/bin/setsid" ).canExecute() || new File( "/bin/setsid" ).canExecute()){
+			cmd.add( "setsid" );
+		}
+		cmd.add( "bash" );
+		cmd.add( "-c" );
+		cmd.add( waiterScript() );
+		cmd.add( "dlcbt-restart" );
+		cmd.add( parentPid > 0 ? Long.toString( parentPid ) : "" );
+		cmd.add( script.getAbsolutePath());
+		ProcessBuilder pb = new ProcessBuilder( cmd );
 		if ( script.getParentFile() != null ){
 			pb.directory( script.getParentFile());
 		}

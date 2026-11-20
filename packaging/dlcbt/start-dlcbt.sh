@@ -132,6 +132,11 @@ if [[ "$DLC_COMPACT" == "1" ]]; then
     *" -Dswt.autoScale="*) ;;
     *) export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+${JAVA_TOOL_OPTIONS} }-Dswt.autoScale=100" ;;
   esac
+  # Pin GTK scale so SWT 4.968 does not re-layout on HDMI dpiChanged.
+  # Leave an already-set GDK_SCALE alone.
+  if [[ -z "${GDK_SCALE:-}" ]]; then
+    export GDK_SCALE=1
+  fi
 fi
 
 java_ver=$("$JAVA_CMD" -version 2>&1 | head -n 1)
@@ -194,7 +199,7 @@ fi
 
 wait_for_previous_instance() {
   local i busy oldpid
-  for i in $(seq 1 50); do
+  for i in $(seq 1 150); do
     busy=0
     if [[ -f "$PIDFILE" ]]; then
       oldpid=$(cat "$PIDFILE" || true)
@@ -208,9 +213,43 @@ wait_for_previous_instance() {
     if [[ "$busy" -eq 0 ]]; then
       return 0
     fi
-    sleep 0.2
+    if (( i == 1 || i % 10 == 0 )); then
+      echo "waiting for previous DownLoadControlBT instance to exit (${i}s)..."
+    fi
+    sleep 1
   done
+  echo "gave up waiting for previous DownLoadControlBT instance after 150s"
   return 1
+}
+
+# Exclusive lock for the running client (not --init-only / --help).
+# Held on FD 9 for the life of this script, including the java process.
+acquire_instance_lock() {
+  local i
+  LOCKFILE="$DATA/dlcbt.lock"
+  mkdir -p "$DATA"
+  exec 9>"$LOCKFILE"
+  for i in $(seq 1 150); do
+    if flock -n 9; then
+      return 0
+    fi
+    if (( i == 1 || i % 10 == 0 )); then
+      echo "waiting for data/dlcbt.lock (${i}s)..."
+    fi
+    sleep 1
+  done
+  echo "gave up waiting for data/dlcbt.lock after 150s"
+  return 1
+}
+
+remove_pidfile_if_ours() {
+  local listed
+  if [[ -f "$PIDFILE" ]]; then
+    listed=$(cat "$PIDFILE" || true)
+    if [[ "${listed:-}" == "$1" ]]; then
+      rm -f "$PIDFILE"
+    fi
+  fi
 }
 
 if ! wait_for_previous_instance; then
@@ -231,8 +270,17 @@ if [[ -f "$PIDFILE" ]]; then
   fi
 fi
 
+if ! acquire_instance_lock; then
+  die "DownLoadControlBT test instance lock is held (data/dlcbt.lock). Not starting another copy."
+fi
+
 echo "Initializing isolated configuration under $CONFIG_CANON"
-run_init
+INIT_OUT=$(run_init)
+echo "$INIT_OUT"
+TCP_LISTEN=$(printf '%s\n' "$INIT_OUT" | sed -n 's/^tcp.listen=//p' | tail -n 1)
+UDP_LISTEN=$(printf '%s\n' "$INIT_OUT" | sed -n 's/^udp.listen=//p' | tail -n 1)
+: "${TCP_LISTEN:=$LISTEN_PORT}"
+: "${UDP_LISTEN:=$LISTEN_PORT}"
 
 echo "Starting DownLoadControlBT test client"
 echo "  config:     $CONFIG_CANON"
@@ -240,7 +288,7 @@ echo "  downloads:  $DOWNLOADS"
 echo "  torrents:   $TORRENTS"
 echo "  logs:       $LOGS/biglybt.log"
 echo "  control:    127.0.0.1:${INSTANCE_PORT} (not 6880)"
-echo "  listen:     ${LISTEN_PORT} (configured in isolated biglybt.config)"
+echo "  listen:     TCP ${TCP_LISTEN}, UDP ${UDP_LISTEN} (from isolated biglybt.config)"
 echo "  regular ~/.biglybt is not used"
 echo "Stop with File > Exit, or ./stop-dlcbt.sh. Data directories are kept."
 
@@ -256,12 +304,12 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
   fi
-  rm -f "$PIDFILE"
+  remove_pidfile_if_ours "$pid"
 }
 trap cleanup INT TERM
 set +e
 wait "$pid"
 status=$?
 set -e
-rm -f "$PIDFILE"
+remove_pidfile_if_ours "$pid"
 exit "$status"

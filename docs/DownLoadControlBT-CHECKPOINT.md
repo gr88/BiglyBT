@@ -1,40 +1,50 @@
-# DownLoadControlBT checkpoint — 2026-11-18 (America/Chicago)
+# DownLoadControlBT checkpoint — 2026-11-20 (America/Chicago)
 
-Increment starts at c19602379 / release 202611101559. See the 2026-11-18
+Increment starts at 948084665 / release 202611181639. See the 2026-11-20
 changelog section for details.
 
 ## Implemented
 
-- S (Sequential) default piece mode for all files without a stored
-  override; stored per-file modes kept.
-- Open Torrent Options multi-select S/R applying to all selected
-  nonempty files, checking unchecked ones.
-- Display-only `DownLoadControlBT<version>` in status bar and About from
-  version.txt; Constants.BIGLYBT_VERSION untouched.
-- "User Mode"=2 (Advanced) by InitIsolatedConfig when missing or still
-  BiglyBT's auto-written Beginner 0 (one-shot dlcbt.usermode.advanced.v1).
-- ~30 s Connecting kick (disconnect, no ban) for outgoing peers.
-- hash-fail DLCBT temporary ban 210–270 s, separate reason, upstream
-  hash-fail rules unchanged, honours dlcbt.ban.enabled.
-- Peers "%Bad/Good" column, visible by default when DLCBT is on.
+- Isolated setIfUnset / one-shot defaults: slots 80/80, connections
+  200/200/500, bias off, UPnP/NAT-PMP off, DHT/PEX/trackers on, global
+  speeds 0, re-check and hide-padding off, require encryption on.
+- OTO Files one-shot wider Name/Size/Priority/Path.
+- Library completed table one-shot widen-to-fit and Done w/DND visible.
+- Automatic Size Column to Fit every 360 s (0 = off) on the new
+  DownLoadControlBT Options page.
+- View > All Peers opened once on first start.
+- Idle-peer ban after ~5 s of no data in or out once Fully Established
+  (54–64 min, reason idle-peer), including while seeding; suppressed by
+  a recent rarest-only reject.
+- Automatic NAT/firewall test after sidebar start; popup only if both
+  TCP and UDP explicitly fail; saved port written to both listen ports.
+- Sticky listen ports (`dlcbt.listen.ports.v1`); launcher prints the
+  real tcp.listen / udp.listen values.
+- Restart waiter 150 s with waiting/gave up logs, setsid, flock on
+  data/dlcbt.lock for the java lifetime, pid file removed only if ours.
+- GDK_SCALE=1 in the compact launcher plus computeSize / swt_build NPE
+  guards. --legacy-swt kept.
+- Rarest-only upload (default on): per file, availability includes us,
+  first/last exempt, hide/reject non-rarest, re-check queued requests,
+  super-seed limited, Have tick when min rises, disconnect after 8
+  non-rarest-only requests with no ban.
+- Sidebar percent: MeasureItem uses full client width; one-shot redraw.
 
 ## Verification and limits
 
-- Full Maven core + UI reactor: 172 tests, zero failures/errors/skips
-  (98 DLCBT tests, 8 new in DownloadControlBTNov18Test).
-- No GUI or live-swarm verification of the status bar, About, OTO
-  multi-select, Peers column, connecting kick or hash-fail ban.
-- Hash fails with several writers and no later block proof are not
-  attributed by BiglyBT, so they do not ban (they do count in %Bad/Good).
-- %Bad/Good is per connection; reconnects start at zero.
-- A column layout saved earlier that explicitly hides %Bad/Good keeps it
-  hidden; new layouts show it.
+- Full Maven core + UI reactor: 180 tests, zero failures/errors/skips
+  (106 DLCBT tests, 8 new in DownloadControlBTNov20Test).
+- No GUI or live-swarm verification of the Options page, NAT popup,
+  idle ban, rarest-only announce/reject, column autofit, All Peers,
+  sidebar percent, HDMI unplug, or File > Restart.
+- Upstream v4.2.0.0 was not merged.
 
 ## Unresolved, non-blocking (carried)
 
-Doubled window after resolution/display changes; old column-width drag,
-first Files right-click jump, native file chooser placement, checkbox
-rendering — unproven on the laptop.
+Doubled window after resolution/display changes may still occur; the
+GDK_SCALE pin and NPE guards are source-level only. Old column-width
+drag, first Files right-click jump, native file chooser placement,
+checkbox rendering — unproven on the laptop.
 
 No upstream changes. PR #1 never merged. No new cloud agents. Never
 commit packaging/dlcbt/stage/, logs, fixture payloads or credentials.

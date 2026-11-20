@@ -526,7 +526,13 @@ public class OutgoingBTPieceMessageHandler {
     if ( to_submit != null ){
     	
     	for (DiskManagerReadRequest req: to_submit ){
-    		
+    		if ( !com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.maySend( peer.getManager(), req.getPieceNumber())){
+    			try{
+    				peer.sendRejectRequest( req );
+    			}catch( Throwable ignored ){
+    			}
+    			continue;
+    		}
     		peer.getManager().getAdapter().enqueueReadRequest( peer, req, read_req_listener );
     	}
     }

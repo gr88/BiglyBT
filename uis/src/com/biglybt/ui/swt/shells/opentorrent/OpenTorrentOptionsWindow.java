@@ -7074,6 +7074,21 @@ public class OpenTorrentOptionsWindow
 					if ( tv == null || tv.isDisposed()){
 						return;
 					}
+					if (!COConfigurationManager.getBooleanParameter(com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults.CFG_OTO_WIDTHS_V1, false)) {
+						java.util.Map<String,Integer> widths = new java.util.HashMap<>();
+						widths.put(TableColumnOTOF_Name.COLUMN_ID, Integer.valueOf(420));
+						widths.put(TableColumnOTOF_Size.COLUMN_ID, Integer.valueOf(110));
+						widths.put(TableColumnOTOF_Priority.COLUMN_ID, Integer.valueOf(90));
+						widths.put(TableColumnOTOF_Path.COLUMN_ID, Integer.valueOf(420));
+						for (com.biglybt.ui.common.table.TableColumnCore c: tv.getAllColumns()) {
+							Integer w = widths.get(c.getName());
+							if (w != null && c.getWidth() < w.intValue()) {
+								c.setWidth(w.intValue());
+							}
+						}
+						TableColumnManager.getInstance().saveTableColumns(TorrentOpenFileOptions.class, tv.getTableID());
+						COConfigurationManager.setParameter(com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults.CFG_OTO_WIDTHS_V1, true);
+					}
 					if (!COConfigurationManager.getBooleanParameter("dlcbt.oto.piece.columns.v1", false)) {
 						int newPosition = tv.getAllColumns().length;
 						for (com.biglybt.ui.common.table.TableColumnCore c: tv.getAllColumns()) {

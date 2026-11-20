@@ -23,6 +23,7 @@ public final class DownloadControlBTBanService
 	public static final String REASON_SPEED_HIGH = "speed-high";
 	public static final String REASON_DUPLICATE = "duplicate-incoming";
 	public static final String REASON_HASH_FAIL = "hash-fail";
+	public static final String REASON_IDLE = DownloadControlBTIdleBan.REASON;
 	/** Hash-fail ban: random 3.5 .. 4.5 minutes, separate from the 54-64 min policy. */
 	public static final long HASH_FAIL_MIN_MS = 210 * 1000L;
 	public static final long HASH_FAIL_MAX_MS = 270 * 1000L;
@@ -217,6 +218,19 @@ public final class DownloadControlBTBanService
 
 	public static long hashFailDurationMs(Random random) {
 		return DownloadControlBTBanRegistry.randomDurationRangeMs(HASH_FAIL_MIN_MS, HASH_FAIL_MAX_MS, random);
+	}
+
+	/** Fully-established peer idle in both directions for ~5 s. */
+	public DownloadControlBTBanRegistry.Ban onIdlePeer(String address, String detail) {
+		if (!isPolicyEnabled() || address == null || address.isEmpty()) return null;
+		DownloadControlBTBanRegistry.Ban ban;
+		synchronized (this) {
+			long now = System.currentTimeMillis();
+			if (registry.isBanned(address, now)) return null;
+			ban = applyBanLocked(address, now, REASON_IDLE, detail);
+		}
+		fire(ban);
+		return ban;
 	}
 
 	public static boolean handshakeOverdue(int state, long establishedMono, long nowMono) {

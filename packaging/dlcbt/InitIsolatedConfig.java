@@ -69,9 +69,12 @@ public final class InitIsolatedConfig
 		COConfigurationManager.setParameter("Send Version Info", false);
 		COConfigurationManager.setParameter("Logger.Enabled", true);
 		COConfigurationManager.setParameter("Logging Enable", true);
-		COConfigurationManager.setParameter("TCP.Listen.Port", 26981);
-		COConfigurationManager.setParameter("UDP.Listen.Port", 26981);
-		COConfigurationManager.setParameter("UDP.NonData.Listen.Port", 26981);
+		if (!COConfigurationManager.hasParameter(DownloadControlBTDefaults.CFG_LISTEN_PORTS_V1, true)) {
+			COConfigurationManager.setParameter("TCP.Listen.Port", DownloadControlBTDefaults.DEFAULT_LISTEN_PORT);
+			COConfigurationManager.setParameter("UDP.Listen.Port", DownloadControlBTDefaults.DEFAULT_LISTEN_PORT);
+			COConfigurationManager.setParameter("UDP.NonData.Listen.Port", DownloadControlBTDefaults.DEFAULT_LISTEN_PORT);
+			COConfigurationManager.setParameter(DownloadControlBTDefaults.CFG_LISTEN_PORTS_V1, true);
+		}
 
 		setIfUnset(DownloadControlBTDefaults.CFG_PROFILE, true);
 		setIfUnset(DownloadControlBTDefaults.CFG_AUTO_QUEUE_DEFAULT, true);
@@ -95,6 +98,29 @@ public final class InitIsolatedConfig
 		// (Beginner), so "unset" means the key is missing or still holds that
 		// auto-written 0 and this one-shot flag has not run yet. A choice of
 		// Intermediate/Advanced, or any later change, is kept.
+		setIfUnset(DownloadControlBTDefaults.CFG_RAREST_ONLY, true);
+		setIfUnset(DownloadControlBTDefaults.CFG_AUTOFIT_SECONDS, DownloadControlBTDefaults.DEFAULT_AUTOFIT_SECONDS);
+
+		// Transfer slots / connections, encryption, recheck, padding, bias, UPnP.
+		// setIfUnset so later user changes stick. DHT/PEX/trackers already default on.
+		setIfUnset("Max Uploads", 80);
+		setIfUnset("Max Uploads Seeding", 80);
+		setIfUnset("enable.seedingonly.maxuploads", true);
+		setIfUnset("Max.Peer.Connections.Per.Torrent", 200);
+		setIfUnset("Max.Peer.Connections.Per.Torrent.When.Seeding", 200);
+		setIfUnset("Max.Peer.Connections.Per.Torrent.When.Seeding.Enable", true);
+		setIfUnset("Max.Peer.Connections.Total", 500);
+		setIfUnset("Bias Upload Enable", false);
+		setIfUnset("Seeding Piece Check Recheck Enable", false);
+		setIfUnset("Hide Padding Files", false);
+		setIfUnset("network.transport.encrypted.require", true);
+		setIfUnset("Peer Source Selection Default.Tracker", true);
+		setIfUnset("Peer Source Selection Default.DHT", true);
+		setIfUnset("Peer Source Selection Default.PeerExchange", true);
+		// Built-in UPnP plugin stores keys as Plugin.UPnP.*
+		setIfUnset("Plugin.UPnP.upnp.enable", false);
+		setIfUnset("Plugin.UPnP.natpmp.enable", false);
+
 		if (!COConfigurationManager.hasParameter("dlcbt.usermode.advanced.v1", true)) {
 			if (!COConfigurationManager.hasParameter("User Mode", true)
 					|| COConfigurationManager.getIntParameter("User Mode") == 0) {
@@ -182,6 +208,8 @@ public final class InitIsolatedConfig
 		System.out.println("schedule.up=" + DownloadControlBTDefaults.SCHEDULE_UP);
 		System.out.println("schedule.down=" + DownloadControlBTDefaults.SCHEDULE_DOWN);
 		System.out.println("user.mode=" + COConfigurationManager.getIntParameter("User Mode"));
+		System.out.println("tcp.listen=" + COConfigurationManager.getIntParameter("TCP.Listen.Port"));
+		System.out.println("udp.listen=" + COConfigurationManager.getIntParameter("UDP.Listen.Port"));
 	}
 
 	private static void setIfUnset(String key, boolean value)

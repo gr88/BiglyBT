@@ -39,6 +39,17 @@ public final class DownloadControlBTDefaults
 	public static final String CFG_ADD_OPENOPTIONS = "ui.addtorrent.openoptions";
 	public static final String CFG_ADD_OPENOPTIONS_ALWAYS = "always";
 	public static final String CFG_DEFAULT_STOPPED = "Default Start Torrents Stopped";
+	// Nov 20 settings (Options page + isolated defaults)
+	public static final String CFG_RAREST_ONLY = "dlcbt.upload.rarestonly";
+	public static final String CFG_AUTOFIT_SECONDS = "dlcbt.table.autofit.seconds";
+	public static final int DEFAULT_AUTOFIT_SECONDS = 360;
+	public static final String CFG_LISTEN_PORTS_V1 = "dlcbt.listen.ports.v1";
+	public static final String CFG_ALLPEERS_V1 = "dlcbt.allpeers.visible.v1";
+	public static final String CFG_LIBRARY_COMPLETE_COLS_V1 = "dlcbt.library.complete.columns.v1";
+	public static final String CFG_OTO_WIDTHS_V1 = "dlcbt.oto.column.widths.v1";
+	public static final String FLAG_DEFAULTS_V1 = "dlcbt.defaults.v20261120";
+	public static final int DEFAULT_LISTEN_PORT = 26981;
+
 
 	public static final String SCHEDULE_UP = "peer_set UpPeers=All,peer_up=25.1k";
 	public static final String SCHEDULE_DOWN = "peer_set DownPeers=All,peer_down=251.1k";

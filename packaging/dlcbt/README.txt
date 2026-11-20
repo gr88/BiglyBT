@@ -46,10 +46,16 @@ What this package will not do
   file; multi-select works in the add dialog; no separate Auto file queue
   switch). User Proficiency defaults to Advanced when unset. The status
   bar and Help > About show DownLoadControlBT<version> from version.txt.
-  Off in that dialog disables all experimental gates. Regular ~/.biglybt
-  is never written. I2P/Tor network checkboxes default on here; this
-  package does not install I2P or Tor plugins and does not provide
-  privacy. Private-torrent DHT/PEX restrictions remain as in BiglyBT.
+  Off in that dialog disables all experimental gates. Isolated defaults
+  also set upload slots 80 (seeding alternate 80), connections 200 per
+  torrent (seeding alternate 200) and 500 global, leave global speeds at
+  0, require encrypted transport, turn UPnP and NAT-PMP off, leave DHT,
+  PEX and trackers on, and uncheck upload bias, piece re-check on
+  completion, and hide-padding. Listen ports default to 26981 once
+  (dlcbt.listen.ports.v1) and then stick. Regular ~/.biglybt is never
+  written. I2P/Tor network checkboxes default on here; this package does
+  not install I2P or Tor plugins and does not provide privacy.
+  Private-torrent DHT/PEX restrictions remain as in BiglyBT.
 
 Requirements
 ------------
@@ -92,7 +98,10 @@ used. Otherwise the first java on PATH is used.
 By default the launcher appends -Dswt.autoScale=100 to JAVA_TOOL_OPTIONS
 so the GTK UI stays compact. Existing JAVA_TOOL_OPTIONS are preserved.
 If JAVA_TOOL_OPTIONS already contains -Dswt.autoScale=..., that value is
-left unchanged. Use --no-compact to skip adding the default.
+left unchanged. Use --no-compact to skip adding the default. In compact
+mode the launcher also sets GDK_SCALE=1 when that variable is unset, so
+SWT 4.968 is less likely to re-layout on an HDMI dpiChanged; an already
+set GDK_SCALE is left alone.
 
 The launcher sets these JVM properties before any BiglyBT class loads:
 
@@ -124,15 +133,16 @@ Meaning, from BiglyBT source:
 - azureus.overridelog / overridelogdir force file logging to data/logs.
 - azureus.restart.cmd plus the package-owned restarter allow File >
   Restart without shipping the official updater plugin. The restarter
-  waits for the old JVM pid (not a fixed two-second sleep), then
-  re-executes this start-dlcbt.sh with stdin/stdout/stderr detached
-  from the dying parent. Child banners go to
-  data/logs/restart-child.log so a future failed relaunch has an error
-  log. The launcher also retries a lingering pid-file or port 26980
-  before refusing. It does not launch a non-isolated Main and does not
-  apply updater payloads. The spawn transport is covered by a dummy
-  subprocess unit test; File > Restart itself was not GUI-clicked in
-  the packaging run.
+  waits up to 150 s for the old JVM pid (logging "waiting" and
+  "gave up" to data/logs/restart-child.log) and starts that waiter
+  with setsid so a hangup of the dying parent does not kill the child.
+  start-dlcbt.sh also waits up to 150 s for a lingering pid-file or
+  port 26980, holds a real flock on data/dlcbt.lock for the whole time
+  java runs, prints the real TCP/UDP listen ports, and removes the pid
+  file only if it still holds this wrapper's own pid. It does not
+  launch a non-isolated Main and does not apply updater payloads. The
+  spawn transport is covered by a dummy subprocess unit test; File >
+  Restart itself was not GUI-clicked in the packaging run.
 
 If 127.0.0.1:26980 is already in use, or this package's pid file still
 points at a live process, the launcher refuses to start. It does not try
@@ -166,6 +176,11 @@ with that address is closed on all torrents.
   column shows hash-failed bytes / good bytes per peer.
 - Connecting: outgoing peers stuck in Connecting about 30 s are
   disconnected (never banned).
+- Idle peer: once Fully Established, a peer with no data downloaded
+  from it and no data uploaded to it for more than about 5 seconds
+  (including while seeding) gets the usual 54-64 minute ban (reason
+  idle-peer). A recent rarest-only reject in that window suppresses
+  the idle ban.
 - Duplicates: the 3rd rejected incoming duplicate connection from the
   same address on the same torrent within 60 s bans it. Different
   torrents do not add up; outgoing dials are never counted.
@@ -178,6 +193,27 @@ with that address is closed on all torrents.
   dlcbt.ban.duplicate.threshold=3. Set dlcbt.ban.enabled=false in BiglyBT's
   advanced (raw) config view to turn bans off.
   Restarting the client clears all current DLCBT bans.
+
+Rarest-only upload and the DownLoadControlBT Options page
+---------------------------------------------------------
+dlcbt.upload.rarestonly (default on) is a checkbox on Options >
+DownLoadControlBT. Per file, availability includes our own copy. A
+file's first and last pieces are always allowed (a piece that spans
+two files is therefore always allowed). Only pieces at that file's
+current lowest availability among the pieces we have may be sent,
+while downloading and while seeding. Non-rarest pieces are hidden
+from bitfield and Have announcements; requests for them are rejected
+(including a re-check of queued requests before the disk read).
+Super-seeding is limited to allowed pieces. When the per-file minimum
+rises, Have is sent for newly allowed pieces. A peer that keeps
+asking only for non-rarest pieces is disconnected after 8 rejects,
+with no ban.
+
+The same Options page has "Automatically size all table columns to
+fit" in seconds (default 360, 0 = off). View > All Peers is opened
+once on first start. After the sidebar is up, a NAT/firewall test
+runs; if both TCP and UDP explicitly fail, a popup asks for the
+forwarded port and saves it as both listen ports.
 
 Upload: this build sets overall/session upload to unlimited once
 (dlcbt.upload.unlimited.v1). The per-peer schedule (peer_up=25.1k per
