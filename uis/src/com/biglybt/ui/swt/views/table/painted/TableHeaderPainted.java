@@ -29,6 +29,7 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.*;
 
 import com.biglybt.core.config.COConfigurationManager;
+import com.biglybt.core.downloadcontrolbt.TablePointerHit;
 import com.biglybt.core.config.ParameterListener;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.ui.common.table.TableColumnCore;
@@ -52,6 +53,9 @@ public class TableHeaderPainted
 {
 	private static final int DEFAULT_HEADER_HEIGHT = 27;
 
+	/** Shared header-divider hit slop, used for both resize and to refuse column-move DND. */
+	private static final int RESIZE_HIT_PX = 5;
+
 	private static boolean gradientHeader;
 	
 	static{
@@ -74,6 +78,12 @@ public class TableHeaderPainted
 	private TableColumnCore droppingOnHeader;
 
 	private boolean droppingAfterHeader = false;
+
+	/** Last control-relative pointer X from MouseDown/Move (not DragSourceEvent). */
+	int lastPointerX;
+
+	/** True while MouseDown hit a column divider and resize is in progress. */
+	boolean headerSizing;
 
 	private Font fontHeaderSmall;
 
@@ -103,7 +113,7 @@ public class TableHeaderPainted
 
 		cHeaderArea.addPaintListener(this::paintHeader);
 
-		Listener l = new MouseListeners(cHeaderArea, tv);
+		Listener l = new MouseListeners(this, cHeaderArea, tv);
 
 		cHeaderArea.addListener(SWT.MouseDown, l);
 		cHeaderArea.addListener(SWT.MouseUp, l);
@@ -447,11 +457,29 @@ public class TableHeaderPainted
 		cHeaderArea.setMenu(menu);
 	}
 
+	static boolean
+	isColumnBoundaryHit(
+		int					mouseX,
+		int					clientAreaX,
+		TableColumnCore[]	visibleColumns )
+	{
+		if ( visibleColumns == null ){
+			return false;
+		}
+		int[] widths = new int[visibleColumns.length];
+		for ( int i = 0; i < visibleColumns.length; i++ ){
+			widths[i] = visibleColumns[i].getWidth();
+		}
+		return TablePointerHit.isColumnBoundaryHit( mouseX, clientAreaX, widths, RESIZE_HIT_PX );
+	}
+
 	private static class MouseListeners
 		implements Listener
 	{
 		private int	upClicksPending = 0;
 				
+		private final TableHeaderPainted header;
+
 		private final Canvas cHeaderArea;
 
 		private final TableViewPainted tv;
@@ -462,7 +490,8 @@ public class TableHeaderPainted
 
 		int columnSizingStart;
 
-		public MouseListeners(Canvas cHeaderArea, TableViewPainted tv) {
+		public MouseListeners(TableHeaderPainted header, Canvas cHeaderArea, TableViewPainted tv) {
+			this.header = header;
 			this.cHeaderArea = cHeaderArea;
 			this.tv = tv;
 			mouseDown = false;
@@ -523,8 +552,10 @@ public class TableHeaderPainted
 						return;
 					}
 					mouseDown = true;
+					header.lastPointerX = e.x;
 
 					columnSizing = null;
+					header.headerSizing = false;
 					Rectangle clientArea = tv.getClientArea();
 					int x = -clientArea.x;
 					TableColumnCore[] visibleColumns = tv.getVisibleColumns();
@@ -532,9 +563,10 @@ public class TableHeaderPainted
 						int w = column.getWidth();
 						x += w;
 
-						if (e.x >= x - 3 && e.x <= x + 3) {
+						if (e.x >= x - RESIZE_HIT_PX && e.x <= x + RESIZE_HIT_PX) {
 							columnSizing = column;
 							columnSizingStart = e.x;
+							header.headerSizing = true;
 							break;
 						}
 					}
@@ -575,11 +607,13 @@ public class TableHeaderPainted
 						}
 					}
 					columnSizing = null;
+					header.headerSizing = false;
 					mouseDown = false;
 					break;
 				}
 
 				case SWT.MouseMove: {
+					header.lastPointerX = e.x;
 					if (columnSizing != null) {
 						int diff = (e.x - columnSizingStart);
 						columnSizing.setWidthPX(columnSizing.getWidth() + diff);
@@ -593,7 +627,7 @@ public class TableHeaderPainted
 							int w = column.getWidth();
 							x += w;
 
-							if (e.x >= x - 3 && e.x <= x + 3) {
+							if (e.x >= x - RESIZE_HIT_PX && e.x <= x + RESIZE_HIT_PX) {
 								cursorID = SWT.CURSOR_SIZEWE;
 								break;
 							}
@@ -761,9 +795,19 @@ public class TableHeaderPainted
 			if (cHeaderArea.isDisposed() || event.display == null) {
 				return;
 			}
-			Cursor cursor = cHeaderArea.getCursor();
-			if (cursor != null
-					&& cursor.equals(event.display.getSystemCursor(SWT.CURSOR_SIZEWE))) {
+			// Decide resize vs move from the same boundary hit-test used by
+			// MouseDown, not from cursor-object identity (GTK can return a
+			// cursor that is not == the system SIZEWE instance).
+			// Prefer the last SWT MouseEvent X (control-relative) over
+			// DragSourceEvent.x, which GTK may report in another space or
+			// before MouseDown has run. Cancel move if either coordinate
+			// hits a divider or MouseDown already started a resize.
+			Rectangle clientArea = tv.getClientArea();
+			int clientAreaX = clientArea == null ? 0 : clientArea.x;
+			TableColumnCore[] cols = tv.getVisibleColumns();
+			if ( headerSizing
+				|| isColumnBoundaryHit( lastPointerX, clientAreaX, cols )
+				|| isColumnBoundaryHit( event.x, clientAreaX, cols )) {
 				event.doit = false;
 				return;
 			}

@@ -144,6 +144,8 @@ public class SideBar
 	private SideBarEntrySWT	lastMenuEntry;
 	
 	private boolean addEntriesToDash = false;
+
+	private boolean dlcbtFirstLayoutRedrawDone;
 	
 	public SideBar() {
 		super(null, UISWTInstance.VIEW_MAIN, null);
@@ -722,6 +724,9 @@ public class SideBar
 		new SideBarToolTips(this, tree);
 
 		tree.setLayoutData(Utils.getFilledFormData());
+		// One-shot: after the first layout the percent tags need a full-width paint.
+		Utils.execSWTThreadLater(400, this::dlcbtRedrawAfterFirstLayout);
+
 
 		SWTSkinProperties skinProperties = skin.getSkinProperties();
 		
@@ -819,18 +824,12 @@ public class SideBar
 				try {
 					switch (event.type) {
 						case SWT.MeasureItem: {
+							// Always request the full client width so the percent
+							// tag (drawn at the right edge) is inside the native
+							// PaintItem clip on GTK as well as Windows.
 							int clientWidth = tree.getClientArea().width;
-							String text = treeItem.getText(event.index);
-							Point size = event.gc.textExtent(text);
-							if (event.x + event.width < clientWidth) {
-								event.width = size.x + event.x; // tree.getClientArea().width;
-								event.x = 0;
-							}
-
-							if (Constants.isWindows) {
-								event.width = clientWidth - event.x;
-							}
-
+							event.x = 0;
+							event.width = Math.max(0, clientWidth);
 							event.height = 20;
 
 							break;
@@ -921,6 +920,7 @@ public class SideBar
 
 						case SWT.Resize: {
 							tree.redraw();
+							dlcbtRedrawAfterFirstLayout();
 							break;
 						}
 
@@ -1815,6 +1815,26 @@ public class SideBar
 	 *
 	 *
 	 * @since 3.1.1.1
+	 */
+	private void
+	dlcbtRedrawAfterFirstLayout()
+	{
+		if ( dlcbtFirstLayoutRedrawDone ){
+			return;
+		}
+		Tree t = tree;
+		if ( t == null || t.isDisposed()){
+			return;
+		}
+		if ( t.getClientArea().width <= 0 ){
+			return;
+		}
+		dlcbtFirstLayoutRedrawDone = true;
+		t.redraw();
+	}
+
+	/**
+	 * @param event
 	 */
 	private void swt_updateSideBarHitAreasY(SideBarEntrySWT[] entries) {
 		for (int x = 0; x < entries.length; x++) {

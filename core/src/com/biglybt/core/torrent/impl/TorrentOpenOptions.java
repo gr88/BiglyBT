@@ -40,6 +40,8 @@ import com.biglybt.core.tag.TagManagerFactory;
 import com.biglybt.core.tag.TagType;
 import com.biglybt.core.tag.TagUtils;
 import com.biglybt.core.torrent.*;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
 import com.biglybt.core.util.*;
 import com.biglybt.plugin.I2PHelpers;
 import com.biglybt.ui.UIFunctions;
@@ -161,6 +163,10 @@ public class TorrentOpenOptions
 	
 	private boolean	hide_errors;
 
+	private boolean					dlcbtExplicitOff = false;
+	private boolean					dlcbtAutoQueue = false;
+	private Map<Integer, Integer>	dlcbtFileModes = new HashMap<>();
+
 	public static final int CA_NONE			= 0;
 	public static final int CA_ACCEPT		= 1;
 	public static final int CA_REJECT		= 2;
@@ -197,6 +203,7 @@ public class TorrentOpenOptions
 		Map<String,Object>		options ) 
 	{
 		iStartID = getDefaultStartMode();
+		dlcbtAutoQueue = DownloadControlBT.isAutoQueueDefault();
 		if ( getAutoQueuePositionTime() > 0 ){
 			iQueueLocation = QUEUELOCATION_AUTO;
 		}else{
@@ -424,6 +431,9 @@ public class TorrentOpenOptions
 		this.move_on_complete	= toBeCloned.move_on_complete;
 		
 		this.hide_errors		= toBeCloned.hide_errors;
+		this.dlcbtExplicitOff	= toBeCloned.dlcbtExplicitOff;
+		this.dlcbtAutoQueue		= toBeCloned.dlcbtAutoQueue;
+		this.dlcbtFileModes		= toBeCloned.dlcbtFileModes == null ? new HashMap<>() : new HashMap<>(toBeCloned.dlcbtFileModes);
 	}
 
 	public TorrentOpenOptions
@@ -433,8 +443,46 @@ public class TorrentOpenOptions
 	}
 	
 	public static int getDefaultStartMode() {
-		return (COConfigurationManager.getBooleanParameter("Default Start Torrents Stopped"))
-				? STARTMODE_STOPPED : STARTMODE_QUEUED;
+		return DownloadControlBTDefaults.resolveDefaultStartMode(
+			COConfigurationManager.getBooleanParameter(DownloadControlBTDefaults.CFG_DEFAULT_STOPPED),
+			COConfigurationManager.getBooleanParameter(DownloadControlBTDefaults.CFG_DEFAULT_FORCE_START, false));
+	}
+
+	public boolean isDlcbtExplicitOff() {
+		return dlcbtExplicitOff;
+	}
+
+	public void setDlcbtExplicitOff(boolean dlcbtExplicitOff) {
+		this.dlcbtExplicitOff = dlcbtExplicitOff;
+	}
+
+	public boolean isDlcbtAutoQueue() {
+		return dlcbtAutoQueue;
+	}
+
+	public void setDlcbtAutoQueue(boolean dlcbtAutoQueue) {
+		this.dlcbtAutoQueue = dlcbtAutoQueue;
+		if ( dlcbtAutoQueue ){
+			dlcbtExplicitOff = false;
+		}
+	}
+
+	public int getDlcbtFileMode(int index) {
+		Integer mode = dlcbtFileModes.get(Integer.valueOf(index));
+		return mode == null ? 0 : mode.intValue();
+	}
+
+	public void setDlcbtFileMode(int index, int mode) {
+		if ( mode == DownloadControlBT.MODE_SEQUENTIAL || mode == DownloadControlBT.MODE_RANDOM ){
+			dlcbtFileModes.put(Integer.valueOf(index), Integer.valueOf(mode));
+			dlcbtExplicitOff = false;
+		}else{
+			dlcbtFileModes.remove(Integer.valueOf(index));
+		}
+	}
+
+	public Map<Integer, Integer> getDlcbtFileModes() {
+		return new HashMap<>(dlcbtFileModes);
 	}
 
 	public File getInitialLinkage(int index) {
@@ -2300,6 +2348,14 @@ public class TorrentOpenOptions
 							if ( priorities != null ){
 
 								file_info_set.setPriority( priorities );
+							}
+
+							if ( getStartMode() != TorrentOpenOptions.STARTMODE_SEEDING ){
+								DownloadControlBT.applyNewTorrentDefaults(
+									dm,
+									isDlcbtExplicitOff(),
+									isDlcbtAutoQueue(),
+									getDlcbtFileModes());
 							}
 
 							int	maxUp = getMaxUploadSpeed();

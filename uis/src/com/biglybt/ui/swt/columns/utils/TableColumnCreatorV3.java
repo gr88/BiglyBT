@@ -19,6 +19,8 @@
 package com.biglybt.ui.swt.columns.utils;
 
 import com.biglybt.activities.ActivitiesEntry;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
 import com.biglybt.core.util.Debug;
 import com.biglybt.core.util.LightHashMap;
 import com.biglybt.pif.download.Download;
@@ -68,7 +70,7 @@ public class TableColumnCreatorV3
 			PeersItem.COLUMN_ID,
 			ShareRatioItem.COLUMN_ID
 		};
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			RankItem.COLUMN_ID,
 			ColumnThumbAndName.COLUMN_ID,
 			ColumnStream.COLUMN_ID,
@@ -82,6 +84,10 @@ public class TableColumnCreatorV3
 			"azbuddy.ui.column.msgpending",
 			DateAddedItem.COLUMN_ID
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
+
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map<String, TableColumnCore> mapTCs = tcManager.getTableColumnsAsMap(
@@ -99,7 +105,12 @@ public class TableColumnCreatorV3
 			}
 		} else {
 			upgradeColumns(oldVisibleOrder, defaultVisibleOrder, mapTCs);
+			if (DownloadControlBT.isProfileEnabled()) {
+				upgradeColumns(stockVisibleOrder, defaultVisibleOrder, mapTCs);
+			}
 		}
+
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTLibraryColumns.applyOnce(mapTCs, Download.class, tableID, false);
 
 		// special changes
 		StatusItem tcStatusItem = (StatusItem) mapTCs.get(StatusItem.COLUMN_ID);
@@ -165,7 +176,7 @@ public class TableColumnCreatorV3
 			"azsubs.ui.column.subs",
 			"azbuddy.ui.column.msgpending",
 		};
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			RankItem.COLUMN_ID,
 			ColumnThumbAndName.COLUMN_ID,
 			ColumnStream.COLUMN_ID,
@@ -178,6 +189,10 @@ public class TableColumnCreatorV3
 			"azbuddy.ui.column.msgpending",
 			DateAddedItem.COLUMN_ID
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
+
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map<String, TableColumnCore> mapTCs = tcManager.getTableColumnsAsMap(
@@ -195,7 +210,12 @@ public class TableColumnCreatorV3
 			}
 		} else {
 			upgradeColumns(oldVisibleOrder, defaultVisibleOrder, mapTCs);
+			if (DownloadControlBT.isProfileEnabled()) {
+				upgradeColumns(stockVisibleOrder, defaultVisibleOrder, mapTCs);
+			}
 		}
+
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTLibraryColumns.applyOnce(mapTCs, DownloadTypeIncomplete.class, tableID, true);
 
 		// special changes
 		StatusItem tcStatusItem = (StatusItem) mapTCs.get(StatusItem.COLUMN_ID);
@@ -254,7 +274,7 @@ public class TableColumnCreatorV3
 			ShareRatioItem.COLUMN_ID,
 			DateCompletedItem.COLUMN_ID,
 		};
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			RankItem.COLUMN_ID,
 			ColumnThumbAndName.COLUMN_ID,
 			ColumnStream.COLUMN_ID,
@@ -266,6 +286,10 @@ public class TableColumnCreatorV3
 			"azbuddy.ui.column.msgpending",
 			DateCompletedItem.COLUMN_ID
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
+
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map<String, TableColumnCore> mapTCs = tcManager.getTableColumnsAsMap(DownloadTypeComplete.class,
@@ -283,6 +307,9 @@ public class TableColumnCreatorV3
 			}
 		} else {
 			upgradeColumns(oldVisibleOrder, defaultVisibleOrder, mapTCs);
+			if (DownloadControlBT.isProfileEnabled()) {
+				upgradeColumns(stockVisibleOrder, defaultVisibleOrder, mapTCs);
+			}
 		}
 
 		// special changes
@@ -299,6 +326,8 @@ public class TableColumnCreatorV3
 				tcShareRatioItem.setChangeFG(false);
 			}
 		}
+
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTLibraryColumns.applyOnce(mapTCs, DownloadTypeComplete.class, tableID, false);
 
 		return mapTCs.values().toArray(new TableColumnCore[0]);
 	}
@@ -314,7 +343,7 @@ public class TableColumnCreatorV3
 			StatusItem.COLUMN_ID,
 			DateCompletedItem.COLUMN_ID,
 		};
-		final String[] defaultVisibleOrder = {
+		final String[] stockVisibleOrder = {
 			ColumnUnopened.COLUMN_ID,
 			ColumnThumbAndName.COLUMN_ID,
 			ColumnStream.COLUMN_ID,
@@ -324,6 +353,10 @@ public class TableColumnCreatorV3
 			"azbuddy.ui.column.msgpending",
 			DateCompletedItem.COLUMN_ID,
 		};
+		final String[] defaultVisibleOrder = DownloadControlBT.isProfileEnabled()
+			? DownloadControlBTDefaults.applyHiddenDefaultLibraryColumns(stockVisibleOrder)
+			: stockVisibleOrder;
+
 
 		TableColumnManager tcManager = TableColumnManager.getInstance();
 		Map<String, TableColumnCore> mapTCs = tcManager.getTableColumnsAsMap(DownloadTypeComplete.class,
@@ -341,6 +374,9 @@ public class TableColumnCreatorV3
 			}
 		} else {
 			upgradeColumns(oldVisibleOrder, defaultVisibleOrder, mapTCs);
+			if (DownloadControlBT.isProfileEnabled()) {
+				upgradeColumns(stockVisibleOrder, defaultVisibleOrder, mapTCs);
+			}
 		}
 
 		// special changes
@@ -357,6 +393,8 @@ public class TableColumnCreatorV3
 				tcShareRatioItem.setChangeFG(false);
 			}
 		}
+
+		com.biglybt.ui.swt.views.table.utils.DownloadControlBTLibraryColumns.applyOnce(mapTCs, Download.class, tableID, false);
 
 		return mapTCs.values().toArray(new TableColumnCore[0]);
 	}

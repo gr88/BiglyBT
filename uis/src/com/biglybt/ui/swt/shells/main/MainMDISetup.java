@@ -1908,6 +1908,8 @@ public class MainMDISetup
 				return null;
 			}
 		});
+
+		com.biglybt.core.downloadcontrolbt.DownloadControlBTUiStartup.afterSideBar( mdi );
 	}
 	
 	public static SB_Transfers getSb_transfers() {
