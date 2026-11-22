@@ -342,6 +342,18 @@ public class SideBarEntrySWT
 						m.invoke(swtItem);
 					} catch (Throwable e) {
 					}
+					// TreeItem.clear() is a no-op on non-VIRTUAL GTK3 trees; still
+					// schedule a full-width row redraw so child tags & pills repaint.
+					try {
+						Rectangle bounds = swtItem.getBounds();
+						Rectangle treeBounds = tree.getClientArea();
+						if (treeBounds.width > 0 && bounds.height > 0) {
+							tree.redraw(0, bounds.y, treeBounds.width, bounds.height, true);
+						} else {
+							tree.redraw();
+						}
+					} catch (Throwable ignored) {
+					}
 				} else {
 
 					try {
@@ -478,8 +490,13 @@ public class SideBarEntrySWT
 
 				SWTSkinObject skinObject = skin.createSkinObject(id, skinRef,
 						soContents, getDatasourceCore());
-
+				if (skinObject == null) {
+					return false;
+				}
 				control = skinObject.getControl();
+				if (control == null) {
+					return false;
+				}
 				control.setLayoutData(Utils.getFilledFormData());
 				control.getParent().layout(true, true);
 				setPluginSkinObject(skinObject);
@@ -1440,6 +1457,17 @@ public class SideBarEntrySWT
 				m.setAccessible(true);
 				m.invoke(swtItem);
 			} catch (Throwable e) {
+			}
+			try {
+				Tree parent = swtItem.getParent();
+				Rectangle bounds = swtItem.getBounds();
+				Rectangle treeBounds = parent.getClientArea();
+				if (treeBounds.width > 0 && bounds.height > 0) {
+					parent.redraw(0, bounds.y, treeBounds.width, bounds.height, true);
+				} else {
+					parent.redraw();
+				}
+			} catch (Throwable ignored) {
 			}
 		} else {
 			Tree parent = swtItem.getParent();

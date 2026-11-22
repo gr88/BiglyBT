@@ -803,7 +803,14 @@ public class TableRowPainted
 							graphicBounds.y += (graphicBounds.height - imageBounds.height) / 2;
 						}
 
+						boolean wasAdv = gc.getAdvanced();
+						if (wasAdv) {
+							gc.setAdvanced(false);
+						}
 						gc.drawImage(graphicSWT, graphicBounds.x, graphicBounds.y);
+						if (wasAdv) {
+							gc.setAdvanced(true);
+						}
 					}
 
 				}

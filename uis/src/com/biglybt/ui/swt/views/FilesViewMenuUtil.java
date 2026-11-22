@@ -45,6 +45,8 @@ import com.biglybt.core.disk.DiskManagerFileInfoSet;
 import com.biglybt.core.download.DownloadManager;
 import com.biglybt.core.download.DownloadManagerListener;
 import com.biglybt.core.download.DownloadManagerState;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.downloadcontrolbt.TablePointerHit;
 import com.biglybt.core.download.impl.DownloadManagerAdapter;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.peer.PEPeerManager;
@@ -367,6 +369,108 @@ public class FilesViewMenuUtil
 		itemDelete.setData("Priority", PRIORITY_DELETE);
 		Messages.setLanguageText(itemDelete, "wizard.multitracker.delete"); // lazy but we're near release
 
+		if ( all_files.size() >= 1 ){
+			DiskManagerFileInfo first = all_files.get(0);
+			DownloadManager dlc_dm = first.getDownloadManager();
+			boolean dlc_single = all_files.size() == 1;
+			DiskManagerFileInfo dlc_file = dlc_single ? first : null;
+			// S / R on an unchecked file also checks it for download
+			boolean dlc_usable = dlc_file != null && dlc_file.getLength() > 0;
+			String dlc_disable = TablePointerHit.modeOverrideDisableReason(
+				!dlc_single,
+				false,
+				dlc_file != null && dlc_file.getLength() <= 0 );
+			int dlc_policy = DownloadControlBT.getPolicy( dlc_dm );
+			boolean dlc_off = dlc_policy == DownloadControlBT.POLICY_OFF || !DownloadControlBT.isEnabled( dlc_dm );
+			int dlc_file_mode = DownloadControlBT.MODE_OFF;
+			if ( dlc_file != null && !dlc_off ){
+				if ( dlc_policy == DownloadControlBT.POLICY_AUTO ){
+					dlc_file_mode = DownloadControlBT.getEffectiveFileMode( dlc_dm, dlc_file.getIndex());
+				}else if ( DownloadControlBT.isEnabledForFile( dlc_dm, dlc_file.getIndex())){
+					dlc_file_mode = DownloadControlBT.getMode( dlc_dm );
+				}
+			}
+
+			final MenuItem itemDownloadControlBT = new MenuItem(menu, SWT.CASCADE);
+			Messages.setLanguageText(itemDownloadControlBT, "menu.downloadcontrolbt");
+			itemDownloadControlBT.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.tooltip" ));
+
+			Menu menuDLC = new Menu(menu.getShell(), SWT.DROP_DOWN);
+			itemDownloadControlBT.setMenu(menuDLC);
+
+			final MenuItem itemDLCOff = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCOff, "menu.downloadcontrolbt.off");
+			itemDLCOff.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.off.tooltip" ));
+			itemDLCOff.setSelection( dlc_off );
+			itemDLCOff.addListener( SWT.Selection, event -> {
+				if ( itemDLCOff.getSelection()){
+					DownloadControlBT.disable( dlc_dm );
+				}
+			});
+
+			final MenuItem itemDLCSequential = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCSequential, "menu.downloadcontrolbt.sequential");
+			itemDLCSequential.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.sequential.tooltip" ));
+			itemDLCSequential.setSelection( dlc_file_mode == DownloadControlBT.MODE_SEQUENTIAL );
+			itemDLCSequential.setEnabled( dlc_usable );
+			if ( dlc_disable != null ){
+				itemDLCSequential.setToolTipText( MessageText.getString(
+					"menu.downloadcontrolbt.mode.disabled." + (
+						TablePointerHit.DISABLE_MULTI.equals( dlc_disable ) ? "multiselect" :
+						TablePointerHit.DISABLE_SKIPPED.equals( dlc_disable ) ? "skipped" : "empty" )));
+			}
+			itemDLCSequential.addListener( SWT.Selection, event -> {
+				if ( itemDLCSequential.getSelection() && dlc_file != null ){
+					DownloadControlBT.chooseFileMode( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_SEQUENTIAL );
+				}
+			});
+
+			final MenuItem itemDLCRandom = new MenuItem(menuDLC, SWT.RADIO);
+			Messages.setLanguageText(itemDLCRandom, "menu.downloadcontrolbt.random");
+			itemDLCRandom.setToolTipText(
+				MessageText.getString( "menu.downloadcontrolbt.random.tooltip" ));
+			itemDLCRandom.setSelection( dlc_file_mode == DownloadControlBT.MODE_RANDOM );
+			itemDLCRandom.setEnabled( dlc_usable );
+			if ( dlc_disable != null ){
+				itemDLCRandom.setToolTipText( MessageText.getString(
+					"menu.downloadcontrolbt.mode.disabled." + (
+						TablePointerHit.DISABLE_MULTI.equals( dlc_disable ) ? "multiselect" :
+						TablePointerHit.DISABLE_SKIPPED.equals( dlc_disable ) ? "skipped" : "empty" )));
+			}
+			itemDLCRandom.addListener( SWT.Selection, event -> {
+				if ( itemDLCRandom.getSelection() && dlc_file != null ){
+					DownloadControlBT.chooseFileMode( dlc_dm, dlc_file.getIndex(), DownloadControlBT.MODE_RANDOM );
+				}
+			});
+
+			if (DownloadControlBT.isProfileEnabled() && dlc_file != null) {
+				MenuItem forward = new MenuItem(menuDLC, SWT.PUSH);
+				Messages.setLanguageText(forward, "menu.downloadcontrolbt.forward");
+				forward.setEnabled(dlc_file.getLength() > 0);
+				forward.addListener(SWT.Selection, event -> {
+					SimpleTextEntryWindow input = new SimpleTextEntryWindow("dlcbt.forward.title", "dlcbt.forward.text");
+					input.setPreenteredText(String.valueOf(dlc_file.getFirstPieceNumber()), false);
+					input.prompt(new UIInputReceiverListener() {
+						public void UIInputReceiverClosed(UIInputReceiver receiver) {
+							if (!receiver.hasSubmittedInput()) return;
+							boolean ok = false;
+							try { ok = DownloadControlBT.startForward(dlc_dm, dlc_file.getIndex(), Integer.parseInt(receiver.getSubmittedInput().trim())); }
+							catch (RuntimeException e) { }
+							if (!ok) new MessageBoxShell(SWT.ICON_ERROR | SWT.OK,
+								MessageText.getString("dlcbt.forward.title"),
+								MessageText.getString("dlcbt.forward.invalid", new String[]{String.valueOf(dlc_file.getFirstPieceNumber()), String.valueOf(dlc_file.getLastPieceNumber())})).open(null);
+						}
+					});
+				});
+			}
+
+			// "Auto file queue" switch removed: the strict one-file-at-a-time
+			// priority queue is always the engine when DLCBT is on.
+		}
+
 		if ( all_files.size() == 1 ){
 			DiskManagerFileInfo file = all_files.get(0);
 			final MenuItem itemSequential = new MenuItem(menu, SWT.CHECK);
@@ -403,7 +507,7 @@ public class FilesViewMenuUtil
 						}
 					});
 			}
-			
+
 			final MenuItem setThumb = new MenuItem(menu, SWT.PUSH);
 			Messages.setLanguageText(setThumb, "menu.set.file.as.thumb");
 						
@@ -2432,6 +2536,9 @@ public class FilesViewMenuUtil
 		}
 		
 		set.setPriority( priorities );
+		if ( DownloadControlBT.isProfileEnabled()){
+			setSkipped( manager, fileInfos, false, 0, false );
+		}
 	}
 	
 	private static void
@@ -2466,8 +2573,10 @@ public class FilesViewMenuUtil
 		}
 		
 		if ( changed ){
-		
 			set.setPriority( priorities );
+			if ( DownloadControlBT.isProfileEnabled()){
+				setSkipped( manager, fileInfos, false, 0, false );
+			}
 		}
 	}
 	

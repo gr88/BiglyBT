@@ -27,6 +27,7 @@ import com.biglybt.ui.swt.imageloader.ImageLoader;
 import org.eclipse.swt.graphics.Rectangle;
 
 import com.biglybt.ui.swt.pif.UISWTGraphic;
+import org.eclipse.swt.graphics.Image;
 import com.biglybt.ui.swt.pifimpl.UISWTGraphicImpl;
 import com.biglybt.pif.ui.tables.TableCell;
 import com.biglybt.pif.ui.tables.TableCellMouseEvent;
@@ -41,9 +42,9 @@ public abstract class
 ColumnCheckBox
 	implements TableCellRefreshListener, TableColumnExtraInfoListener, TableCellMouseListener
 {
-	private final UISWTGraphic tick_icon;
-	private final UISWTGraphic tick_ro_icon;
-	private final UISWTGraphic cross_icon;
+	private UISWTGraphic tick_icon;
+	private UISWTGraphic tick_ro_icon;
+	private UISWTGraphic cross_icon;
 
 	private boolean	read_only;
 
@@ -75,9 +76,7 @@ ColumnCheckBox
 			column.removeCellMouseListener( this );
 		}
 
-		tick_icon 		= new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_yes"));
-		tick_ro_icon 	= new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_ro_yes"));
-		cross_icon 		= new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_no"));
+		ensureIcons();
 	}
 
 	public
@@ -93,6 +92,27 @@ ColumnCheckBox
 		int 		width )
 	{
 		this( column, width,false );
+	}
+
+
+	private void ensureIcons() {
+		if (isGraphicDisposed(tick_icon)) {
+			tick_icon = new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_yes"));
+		}
+		if (isGraphicDisposed(tick_ro_icon)) {
+			tick_ro_icon = new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_ro_yes"));
+		}
+		if (isGraphicDisposed(cross_icon)) {
+			cross_icon = new UISWTGraphicImpl(ImageLoader.getInstance().getImage("check_no"));
+		}
+	}
+
+	private static boolean isGraphicDisposed(UISWTGraphic g) {
+		if (g == null) {
+			return true;
+		}
+		Image img = g.getImage();
+		return img == null || img.isDisposed();
 	}
 
 	protected abstract Boolean
@@ -125,6 +145,7 @@ ColumnCheckBox
 			int	cell_width 		= cell.getWidth();
 			int	cell_height 	= cell.getHeight();
 
+			ensureIcons();
 			Rectangle icon_bounds = tick_icon.getImage().getBounds();
 
 			int x_pad = ( cell_width - icon_bounds.width ) / 2;
@@ -139,7 +160,8 @@ ColumnCheckBox
 					
 					Boolean state = getCheckBoxState( datasource );
 	
-					if ( state != null ){
+					ensureIcons();
+		if ( state != null ){
 	
 						setCheckBoxState( datasource, !state );
 	

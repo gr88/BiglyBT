@@ -268,6 +268,12 @@ DownloadManagerController
 		cached_values_set = false;
 	}
 
+	public DownloadManager
+	getDownloadManager()
+	{
+		return( download_manager );
+	}
+
 	protected void
 	setDownloadManagerState(
 		DownloadManagerState	dms )

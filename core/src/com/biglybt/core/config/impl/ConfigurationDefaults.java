@@ -616,6 +616,10 @@ public class ConfigurationDefaults {
     def.put( "Peer Source Selection Default.Incoming", TRUE);
     def.put( "Peer Source Selection Default.HolePunch", TRUE);
 
+    def.put( "dlcbt.profile.enabled", FALSE );
+    def.put( "dlcbt.auto.queue.default", TRUE );
+    def.put( "dlcbt.default.force.start", FALSE );
+
     def.put( "config.style.useSIUnits", FALSE );
     def.put( "config.style.forceSIValues", Constants.isOSX?FALSE:TRUE );
     def.put( "config.style.useUnitsRateBits", FALSE );

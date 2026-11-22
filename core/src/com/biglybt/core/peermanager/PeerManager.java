@@ -1274,9 +1274,55 @@ public class PeerManager implements CoreStatsProvider {
 				}
 			}
 
+			com.biglybt.core.downloadcontrolbt.DownloadControlBTBanService dlcbt_bans =
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTBanService.get();
+
+			if ( dlcbt_bans.isTemporarilyBanned( host_address )){
+
+				connection.close( "DLCBT temporary ban" );
+
+				return;
+			}
+
 			boolean same_allowed = COConfigurationManager.getBooleanParameter( "Allow Same IP Peers" ) || ( address_mbn != null && address_mbn.isLoopbackAddress());
 
-			if ( !same_allowed && PeerIdentityManager.containsIPAddress( control.getPeerIdentityDataID(), host_address )){
+			boolean dlcbt_policy = !same_allowed && dlcbt_bans.isPolicyEnabled();
+
+			boolean already_connected = !same_allowed && PeerIdentityManager.containsIPAddress( control.getPeerIdentityDataID(), host_address );
+
+			if ( dlcbt_policy && !already_connected ){
+
+					// DLCBT: also treat IPv4-mapped IPv6 / scoped / bracketed forms of
+					// the same exact address as the same host (exact /32 or /128 only)
+
+				try{
+					for ( PEPeer p: control.getPeers()){
+
+						if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTAddresses.same( p.getIp(), host_address )){
+
+							already_connected = true;
+
+							break;
+						}
+					}
+				}catch( Throwable e ){
+				}
+			}
+
+			if ( already_connected ){
+
+				if ( dlcbt_policy ){
+
+					try{
+						dlcbt_bans.onRejectedIncomingDuplicate(
+							com.biglybt.core.util.ByteFormatter.encodeString( control.getHash()),
+							host_address, true, true );
+
+					}catch( Throwable e ){
+
+						Debug.out( e );
+					}
+				}
 
 				if (Logger.isEnabled()){
 

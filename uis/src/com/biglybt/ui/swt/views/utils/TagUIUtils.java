@@ -1250,7 +1250,7 @@ public class TagUIUtils
 			itemOp.setEnabled(can_ops_set[0]);
 		}
 		
-		if ( userMode > 0 ){
+		if ( userMode > 0 || COConfigurationManager.getBooleanParameter( "Always Show Force Start", false )){
 			
 			if ((caps & TagFeatureRunState.RSC_FORCE_START ) != 0 ){
 	

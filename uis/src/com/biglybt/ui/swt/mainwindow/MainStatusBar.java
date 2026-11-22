@@ -1248,7 +1248,12 @@ public class MainStatusBar
 	}
 
 	private void resetStatus() {
-		if (Constants.isCVSVersion()) {
+		String dlcbtVersion = com.biglybt.core.downloadcontrolbt.DownloadControlBTVersion.displayVersion();
+		if (dlcbtVersion != null) {
+			// DLCBT: display-only version; Constants.BIGLYBT_VERSION unchanged
+			statusTextKey = "!" + dlcbtVersion + "!";
+			setStatusImageKey(null);
+		} else if (Constants.isCVSVersion()) {
 			statusTextKey = "!{MainWindow.status.unofficialversion} ("
 					+ Constants.BIGLYBT_VERSION + ")!";
 			setStatusImageKey(STATUS_ICON_WARN);

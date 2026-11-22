@@ -59,6 +59,8 @@ public class ConsoleConfigSections
 	public ConsoleConfigSections() {
 		internalSections = new BaseConfigSection[] {
 			new ConfigSectionMode(),
+			new ConfigSectionDownloadControlBT(),
+			new ConfigSectionDownloadControlBTRules(),
 			new ConfigSectionStartShutdown(),
 			new ConfigSectionBackupRestore(),
 			new ConfigSectionConnection(),

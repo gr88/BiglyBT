@@ -34,6 +34,10 @@ import com.biglybt.core.disk.DiskManager;
 import com.biglybt.core.disk.DiskManagerFileInfo;
 import com.biglybt.core.disk.DiskManagerPiece;
 import com.biglybt.core.download.DownloadManager;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.logging.LogEvent;
+import com.biglybt.core.logging.LogIDs;
+import com.biglybt.core.logging.Logger;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.logging.LogEvent;
 import com.biglybt.core.logging.LogIDs;
@@ -266,12 +270,36 @@ public class FileInfoView
 				{
 					Integer pn = (Integer)menu.getData( "pieceNumber" );
 
+					if ( pn == null || pn.intValue() == -1 ){
+						if ( !fileInfoCanvas.isDisposed()){
+							Point fallback = fileInfoCanvas.toControl(
+								fileInfoCanvas.getDisplay().getCursorLocation());
+							int recovered = getPieceNumber( fallback.x, fallback.y );
+							pn = Integer.valueOf( recovered );
+							menu.setData( "pieceNumber", pn );
+							if ( DownloadControlBT.isProfileEnabled() && Logger.isEnabled()){
+								Logger.log(new LogEvent(LogIDs.GUI,
+									"DownLoadControlBT: file pieces menu recovered pieceNumber="
+										+ recovered + " from cursor " + fallback.x + "," + fallback.y));
+							}
+						}
+					}
+
+					if ( pn == null || pn.intValue() == -1 ){
+						MenuItem none = new MenuItem( menu, SWT.PUSH );
+						Messages.setLanguageText( none, "label.piece.map.none" );
+						none.setEnabled( false );
+						return;
+					}
+
 					if ( pn != null && pn != -1 ){
 
 						DownloadManager	download_manager = file.getDownloadManager();
 
 						if ( download_manager == null ){
-
+							MenuItem none = new MenuItem( menu, SWT.PUSH );
+							Messages.setLanguageText( none, "label.piece.map.unavailable" );
+							none.setEnabled( false );
 							return;
 						}
 
@@ -279,7 +307,9 @@ public class FileInfoView
 						PEPeerManager	peer_manager = download_manager.getPeerManager();
 
 						if ( disk_manager == null || peer_manager == null ){
-
+							MenuItem none = new MenuItem( menu, SWT.PUSH );
+							Messages.setLanguageText( none, "label.piece.map.unavailable" );
+							none.setEnabled( false );
 							return;
 						}
 

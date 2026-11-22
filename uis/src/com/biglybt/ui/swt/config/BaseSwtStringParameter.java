@@ -249,7 +249,14 @@ public class BaseSwtStringParameter<PARAMTYPE extends BaseSwtStringParameter<PAR
 
 				return (new Point(0, 0));
 			}
-			Point pt = super.computeSize(wHint, hHint, changed);
+			Point pt;
+			try {
+				// SWT 4.968 can NPE in Text.computeSizeInPixels when message is null
+				// during a dpiChanged relayout of Options pages.
+				pt = super.computeSize(wHint, hHint, changed);
+			} catch (Throwable t) {
+				pt = new Point(10, 20);
+			}
 
 			if (wHint == SWT.DEFAULT) {
 				Object ld = getLayoutData();

@@ -154,9 +154,11 @@ implements PEPeerTransport
 
 	private boolean identityAdded = false;  //needed so we don't remove id's in closeAll() on duplicate connection attempts
 
-	private int connection_state = PEPeerTransport.CONNECTION_PENDING;
+	private volatile int connection_state = PEPeerTransport.CONNECTION_PENDING;
 	
 	private long 	outbound_connection_start;
+	private int		dlcbt_non_rarest_rejects;
+	private volatile long	dlcbt_last_rarest_reject_mono;
 	private int 	outbound_connection_progress	= CP_UNKNOWN;
 	
 	private String client = ""; // Client name to show to user.
@@ -1815,6 +1817,7 @@ implements PEPeerTransport
 	@Override
 	public void sendHave(int pieceNumber ) {
 		if ( current_peer_state != TRANSFERING || pieceNumber == manager.getHiddenPiece()) return;
+		if ( !com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.mayAnnounce( manager, pieceNumber )) return;
 		//only force if the other peer doesn't have this piece and is not yet interested or we;ve disabled
 		// aggregation
 		final boolean force =!other_peer_interested_in_me &&peerHavePieces !=null &&!peerHavePieces.flags[pieceNumber];
@@ -2069,7 +2072,8 @@ implements PEPeerTransport
 
 			bToSend = bToSend << 1;
 
-			if (pieces[i].isDone() && i != hidden_piece ){
+			if (pieces[i].isDone() && i != hidden_piece
+					&& com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.mayAnnounce( manager, i )){
 
 				if ( lazies != null ){
 
@@ -2637,6 +2641,17 @@ implements PEPeerTransport
 				
 				return true;
 			}
+
+			// DLCBT: kick (not ban) outgoing peers stuck Connecting ~30 s
+			if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.shouldKick(
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.isEnabled(),
+					isIncoming(), true, outbound_connection_start, mono_now,
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.kickMs() )){
+
+				closeConnectionInternally( "DLCBT: connecting timeout (30s), kicked not banned", Transport.CR_TIMEOUT, false, true );
+
+				return true;
+			}
 			
 			if ( connection != null ){
 				
@@ -2812,8 +2827,14 @@ implements PEPeerTransport
 		return( mono_now - last_data_message_sent_time_mono );
 	}
 
+	public long
+	dlcbtLastDataActivityMono()
+	{
+		return Math.max( last_data_message_received_time_mono, last_data_message_sent_time_mono );
+	}
+
 	@Override
-	public long 
+	public long
 	getConnectionEstablishedMonoTime() 
 	{
 		if ( connection_established_time_mono < 0 ){
@@ -4057,6 +4078,30 @@ implements PEPeerTransport
         manager.statsReply( this, rep );
     }
 
+	private void
+	dlcbtNoteNonRarestRequest()
+	{
+		dlcbt_last_rarest_reject_mono = com.biglybt.core.util.SystemTime.getMonotonousTime();
+		dlcbt_non_rarest_rejects++;
+		if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.isDisconnectEnabled()
+				&& dlcbt_non_rarest_rejects >= com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.disconnectAfterRejects() ){
+			closeConnectionInternally( "DLCBT: peer requested only non-rarest pieces, kicked not banned",
+				com.biglybt.core.networkmanager.Transport.CR_NONE, false, true );
+		}
+	}
+
+	public boolean
+	dlcbtHasRecentRarestReject( long nowMono, long windowMs )
+	{
+		return dlcbt_last_rarest_reject_mono > 0 && nowMono - dlcbt_last_rarest_reject_mono <= windowMs;
+	}
+
+	void
+	dlcbtNoteAcceptedRequest()
+	{
+		dlcbt_non_rarest_rejects = 0;
+	}
+
 	protected void decodeRequest( BTRequest request ) {
 		final int number = request.getPieceNumber();
 		final int offset = request.getPieceOffset();
@@ -4070,6 +4115,12 @@ implements PEPeerTransport
 
 		if ( manager.getHiddenPiece() == number ){
 			closeConnectionInternally( "request for piece #" + number + " is invalid as piece is hidden", Transport.CR_NONE );
+			return;
+		}
+
+		if ( !com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.maySend( manager, number )){
+			sendRejectRequest( number, offset, length );
+			dlcbtNoteNonRarestRequest();
 			return;
 		}
 
@@ -4123,6 +4174,7 @@ implements PEPeerTransport
 
 		if ( request_ok ){
 
+			dlcbtNoteAcceptedRequest();
 			if ( outgoing_piece_message_handler == null || !outgoing_piece_message_handler.addPieceRequest( number, offset, length )){
 
 				sendRejectRequest( number, offset, length );

@@ -144,6 +144,10 @@ public class SideBar
 	private SideBarEntrySWT	lastMenuEntry;
 	
 	private boolean addEntriesToDash = false;
+
+	private boolean dlcbtFirstLayoutRedrawDone;
+	private boolean dlcbtRedrawScheduled;
+	private int dlcbtLastTreeWidth = -1;
 	
 	public SideBar() {
 		super(null, UISWTInstance.VIEW_MAIN, null);
@@ -722,6 +726,9 @@ public class SideBar
 		new SideBarToolTips(this, tree);
 
 		tree.setLayoutData(Utils.getFilledFormData());
+		// One-shot: after the first layout the percent tags need a full-width paint.
+		Utils.execSWTThreadLater(400, this::dlcbtRedrawAfterFirstLayout);
+
 
 		SWTSkinProperties skinProperties = skin.getSkinProperties();
 		
@@ -819,18 +826,15 @@ public class SideBar
 				try {
 					switch (event.type) {
 						case SWT.MeasureItem: {
+							// Always request the full client width so child tags
+							// and right-edge pills stay inside the native PaintItem
+							// clip on GTK3 (skip 0 before first layout so GTK does
+							// not cache a zero width).
 							int clientWidth = tree.getClientArea().width;
-							String text = treeItem.getText(event.index);
-							Point size = event.gc.textExtent(text);
-							if (event.x + event.width < clientWidth) {
-								event.width = size.x + event.x; // tree.getClientArea().width;
+							if (clientWidth > 0) {
 								event.x = 0;
+								event.width = clientWidth;
 							}
-
-							if (Constants.isWindows) {
-								event.width = clientWidth - event.x;
-							}
-
 							event.height = 20;
 
 							break;
@@ -920,7 +924,17 @@ public class SideBar
 						}
 
 						case SWT.Resize: {
+							int cw = tree.getClientArea().width;
+							if (cw != dlcbtLastTreeWidth) {
+								dlcbtLastTreeWidth = cw;
+								dlcbtScheduleTreeRedraw();
+							}
 							tree.redraw();
+							dlcbtRedrawAfterFirstLayout();
+							break;
+						}
+						case SWT.Expand: {
+							dlcbtScheduleTreeRedraw();
 							break;
 						}
 
@@ -1280,6 +1294,7 @@ public class SideBar
 
 		// to disable collapsing
 		tree.addListener(SWT.Collapse, treeListener);
+		tree.addListener(SWT.Expand, treeListener);
 		
 		// for accelerators
 		
@@ -1816,6 +1831,43 @@ public class SideBar
 	 *
 	 * @since 3.1.1.1
 	 */
+	private void
+	dlcbtRedrawAfterFirstLayout()
+	{
+		if ( dlcbtFirstLayoutRedrawDone ){
+			return;
+		}
+		Tree t = tree;
+		if ( t == null || t.isDisposed()){
+			return;
+		}
+		if ( t.getClientArea().width <= 0 ){
+			return;
+		}
+		dlcbtFirstLayoutRedrawDone = true;
+		t.redraw();
+	}
+
+	private void
+	dlcbtScheduleTreeRedraw()
+	{
+		if ( dlcbtRedrawScheduled ){
+			return;
+		}
+		dlcbtRedrawScheduled = true;
+		Utils.execSWTThreadLater( 60, () -> {
+			dlcbtRedrawScheduled = false;
+			Tree t = tree;
+			if ( t == null || t.isDisposed() || !t.isVisible()){
+				return;
+			}
+			t.redraw();
+		});
+	}
+
+	/**
+	 * @param event
+	 */
 	private void swt_updateSideBarHitAreasY(SideBarEntrySWT[] entries) {
 		for (int x = 0; x < entries.length; x++) {
 			SideBarEntrySWT entry = entries[x];
@@ -2134,6 +2186,9 @@ public class SideBar
 			treeItem.setData("MdiEntry", entry);
 			
 			entry.setTreeItem(treeItem);
+			if ( parentSwtItem != null ){
+				dlcbtScheduleTreeRedraw();
+			}
 			
 			/*
 			TreeItem[] items = parentSwtItem==null?tree.getItems():parentSwtItem.getItems();

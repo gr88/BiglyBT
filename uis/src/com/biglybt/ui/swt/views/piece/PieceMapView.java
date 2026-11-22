@@ -32,6 +32,10 @@ import com.biglybt.core.config.COConfigurationManager;
 import com.biglybt.core.disk.*;
 import com.biglybt.core.disk.impl.piecemapper.DMPieceList;
 import com.biglybt.core.disk.impl.piecemapper.DMPieceMapEntry;
+import com.biglybt.core.downloadcontrolbt.DownloadControlBT;
+import com.biglybt.core.logging.LogEvent;
+import com.biglybt.core.logging.LogIDs;
+import com.biglybt.core.logging.Logger;
 import com.biglybt.core.download.*;
 import com.biglybt.core.internat.MessageText;
 import com.biglybt.core.logging.LogEvent;
@@ -511,12 +515,38 @@ public class PieceMapView
 			(menu1, event) -> {
 				Integer pn = (Integer) menu1.getData( "pieceNumber" );
 
+				// GTK may show the menu before MenuDetect stores the piece,
+				// which previously built a zero-item popup (tiny empty bubble).
+				if ( pn == null || pn.intValue() == -1 ){
+					if ( !pieceInfoCanvas.isDisposed()){
+						Point fallback = pieceInfoCanvas.toControl(
+							pieceInfoCanvas.getDisplay().getCursorLocation());
+						int recovered = getPieceNumber( fallback.x, fallback.y );
+						pn = Integer.valueOf( recovered );
+						menu1.setData( "pieceNumber", pn );
+						if ( DownloadControlBT.isProfileEnabled() && Logger.isEnabled()){
+							Logger.log(new LogEvent(LogIDs.GUI,
+								"DownLoadControlBT: pieces menu recovered pieceNumber="
+									+ recovered + " from cursor " + fallback.x + "," + fallback.y));
+						}
+					}
+				}
+
+				if ( pn == null || pn.intValue() == -1 ){
+					MenuItem none = new MenuItem(menu1, SWT.PUSH);
+					Messages.setLanguageText( none, "label.piece.map.none" );
+					none.setEnabled( false );
+					return;
+				}
+
 				if ( pn != null && pn != -1 ){
 
 					DownloadManager	download_manager = dlm;
 
 					if ( download_manager == null ){
-
+						MenuItem none = new MenuItem(menu1, SWT.PUSH);
+						Messages.setLanguageText( none, "label.piece.map.unavailable" );
+						none.setEnabled( false );
 						return;
 					}
 
@@ -524,7 +554,9 @@ public class PieceMapView
 					PEPeerManager	peer_manager = download_manager.getPeerManager();
 
 					if ( disk_manager == null || peer_manager == null ){
-
+						MenuItem none = new MenuItem(menu1, SWT.PUSH);
+						Messages.setLanguageText( none, "label.piece.map.unavailable" );
+						none.setEnabled( false );
 						return;
 					}
 

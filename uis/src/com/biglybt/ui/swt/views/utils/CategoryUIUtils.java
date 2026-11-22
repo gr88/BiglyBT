@@ -208,6 +208,32 @@ public class CategoryUIUtils
 		});
 		itemQueue.setEnabled(start);
 
+		List<DownloadManager> forceDownloads = getDownloads( category, filter );
+		if ( TorrentUtil.isForceStartVisible( forceDownloads.toArray(new DownloadManager[0]) )){
+			final MenuItem itemForceStart = new MenuItem(menu, SWT.PUSH);
+			Messages.setLanguageText(itemForceStart, "MyTorrentsView.menu.forceStart");
+			Utils.setMenuItemImage(itemForceStart, "forcestart");
+			boolean canForce = false;
+			for ( DownloadManager dm: forceDownloads ){
+				if ( ManagerUtils.isForceStartable( dm, true )){
+					canForce = true;
+					break;
+				}
+			}
+			itemForceStart.setEnabled( canForce );
+			itemForceStart.addListener(SWT.Selection, new Listener() {
+				@Override
+				public void handleEvent(Event event) {
+					List<DownloadManager> dms = getDownloads( category, filter );
+					for ( DownloadManager dm: dms ){
+						if ( ManagerUtils.isForceStartable( dm, true )){
+							dm.setForceStart( true );
+						}
+					}
+				}
+			});
+		}
+
 		// Stop
 
 		final MenuItem itemStop = new MenuItem(menu, SWT.PUSH);
