@@ -8,6 +8,7 @@ import com.biglybt.core.downloadcontrolbt.DownloadControlBTDefaults;
 import com.biglybt.pif.ui.config.ConfigSection;
 import com.biglybt.pifimpl.local.ui.config.BooleanParameterImpl;
 import com.biglybt.pifimpl.local.ui.config.IntParameterImpl;
+import com.biglybt.pifimpl.local.ui.config.LabelParameterImpl;
 
 public class ConfigSectionDownloadControlBT
 	extends ConfigSectionImpl
@@ -36,5 +37,7 @@ public class ConfigSectionDownloadControlBT
 			"ConfigView.section.dlcbt.autofit.seconds",
 			0, 24 * 60 * 60 );
 		add( autofit );
+
+		add( new LabelParameterImpl( "ConfigView.section.dlcbt.rules.parent_hint" ));
 	}
 }

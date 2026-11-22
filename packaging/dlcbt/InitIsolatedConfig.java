@@ -58,9 +58,9 @@ public final class InitIsolatedConfig
 		mkdirReal(downloads);
 		mkdirReal(torrents);
 
-		COConfigurationManager.setParameter("Default save path", downloads.getPath());
-		COConfigurationManager.setParameter("Save Torrent Files", true);
-		COConfigurationManager.setParameter("General_sDefaultTorrent_Directory", torrents.getPath());
+		setIfUnset("Default save path", downloads.getPath());
+		setIfUnset("Save Torrent Files", true);
+		setIfUnset("General_sDefaultTorrent_Directory", torrents.getPath());
 		COConfigurationManager.setParameter("Wizard Completed", true);
 		COConfigurationManager.setParameter("update.start", false);
 		COConfigurationManager.setParameter("update.periodic", false);
@@ -163,6 +163,19 @@ public final class InitIsolatedConfig
 		setIfUnset(DownloadControlBTBanService.CFG_WINDOW_SECONDS, DownloadControlBTBanService.DEFAULT_WINDOW_SECONDS);
 		setIfUnset(DownloadControlBTBanService.CFG_DUP_WINDOW_SECONDS, DownloadControlBTBanService.DEFAULT_DUP_WINDOW_SECONDS);
 		setIfUnset(DownloadControlBTBanService.CFG_DUP_THRESHOLD, DownloadControlBTBanService.DEFAULT_DUP_THRESHOLD);
+		setIfUnset(DownloadControlBTBanService.CFG_SPEED_ENABLED, true);
+		setIfUnset(DownloadControlBTBanService.CFG_HANDSHAKE_ENABLED, true);
+		setIfUnset(DownloadControlBTBanService.CFG_HANDSHAKE_SECONDS, DownloadControlBTBanService.DEFAULT_HANDSHAKE_SECONDS);
+		setIfUnset(DownloadControlBTBanService.CFG_DUP_ENABLED, true);
+		setIfUnset(DownloadControlBTBanService.CFG_HASH_FAIL_ENABLED, true);
+		setIfUnset(DownloadControlBTBanService.CFG_HASH_FAIL_MIN_SECONDS, DownloadControlBTBanService.DEFAULT_HASH_FAIL_MIN_SECONDS);
+		setIfUnset(DownloadControlBTBanService.CFG_HASH_FAIL_MAX_SECONDS, DownloadControlBTBanService.DEFAULT_HASH_FAIL_MAX_SECONDS);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.CFG_ENABLED, true);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.CFG_IDLE_SECONDS, com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.DEFAULT_IDLE_SECONDS);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.CFG_ENABLED, true);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.CFG_KICK_SECONDS, com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.DEFAULT_KICK_SECONDS);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.CFG_DISCONNECT_ENABLED, true);
+		setIfUnset(com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.CFG_DISCONNECT_REJECTS, com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.DISCONNECT_AFTER_REJECTS);
 
 		// One-shot: overall/session upload unlimited (per-peer schedule
 		// peer_up stays). Later user changes persist.

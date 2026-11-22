@@ -376,6 +376,7 @@ public class ConfigView implements UISWTViewCoreEventListener, ConfigSectionRepo
 		BaseConfigSection[] internalSections = {
                                          new ConfigSectionMode(),
                                          new com.biglybt.ui.config.ConfigSectionDownloadControlBT(),
+                                         new com.biglybt.ui.config.ConfigSectionDownloadControlBTRules(),
                                          new ConfigSectionStartShutdown(),
                                          new ConfigSectionBackupRestoreSWT(),
                                          new ConfigSectionConnection(),

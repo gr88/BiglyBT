@@ -2644,8 +2644,9 @@ implements PEPeerTransport
 
 			// DLCBT: kick (not ban) outgoing peers stuck Connecting ~30 s
 			if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.shouldKick(
-					com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled(),
-					isIncoming(), true, outbound_connection_start, mono_now )){
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.isEnabled(),
+					isIncoming(), true, outbound_connection_start, mono_now,
+					com.biglybt.core.downloadcontrolbt.DownloadControlBTConnectTimeout.kickMs() )){
 
 				closeConnectionInternally( "DLCBT: connecting timeout (30s), kicked not banned", Transport.CR_TIMEOUT, false, true );
 
@@ -4082,7 +4083,8 @@ implements PEPeerTransport
 	{
 		dlcbt_last_rarest_reject_mono = com.biglybt.core.util.SystemTime.getMonotonousTime();
 		dlcbt_non_rarest_rejects++;
-		if ( dlcbt_non_rarest_rejects >= com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.DISCONNECT_AFTER_REJECTS ){
+		if ( com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.isDisconnectEnabled()
+				&& dlcbt_non_rarest_rejects >= com.biglybt.core.downloadcontrolbt.DownloadControlBTRarestUpload.disconnectAfterRejects() ){
 			closeConnectionInternally( "DLCBT: peer requested only non-rarest pieces, kicked not banned",
 				com.biglybt.core.networkmanager.Transport.CR_NONE, false, true );
 		}

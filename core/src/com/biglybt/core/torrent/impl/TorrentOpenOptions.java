@@ -811,6 +811,10 @@ public class TorrentOpenOptions
 			e.printStackTrace();
 		}
 		if (sSmartDir.length() == 0) {
+			String configured = COConfigurationManager.getStringParameter(PARAM_DEFSAVEPATH);
+			if (configured != null && configured.length() > 0) {
+				return configured;
+			}
 			try {
 				return ConfigurationDefaults.getInstance().getStringParameter(PARAM_DEFSAVEPATH);
 			} catch (ConfigurationParameterNotFoundException e) {

@@ -149,4 +149,78 @@ public final class DownloadControlBTDefaults
 		}
 		return STARTMODE_QUEUED;
 	}
+
+	private static volatile boolean stickyDirectoryListenersRegistered;
+
+	/**
+	 * When the user changes the default download folder or default .torrent
+	 * save folder in Options, clear stale file-dialog remembered paths so
+	 * TorrentOpener / OpenTorrentOptions immediately follow the saved value.
+	 */
+	public static void
+	registerStickyDirectoryListeners()
+	{
+		if ( stickyDirectoryListenersRegistered || !DownloadControlBT.isProfileEnabled()){
+			return;
+		}
+		stickyDirectoryListenersRegistered = true;
+		try{
+			com.biglybt.core.config.COConfigurationManager.addParameterListener(
+				"Default save path",
+				name -> clearStaleFilterDir( "previous.filter.dir.data" ));
+			com.biglybt.core.config.COConfigurationManager.addParameterListener(
+				"General_sDefaultTorrent_Directory",
+				name -> clearStaleFilterDir( "previous.filter.dir.torrent" ));
+		}catch( Throwable ignored ){
+		}
+	}
+
+	public static void
+	clearStaleFilterDir(
+		String		key )
+	{
+		try{
+			String existing = com.biglybt.core.config.COConfigurationManager.getStringParameter( key, "" );
+			if ( existing != null && existing.length() > 0 ){
+				com.biglybt.core.config.COConfigurationManager.setParameter( key, "" );
+			}
+		}catch( Throwable ignored ){
+		}
+	}
+
+	private static final Set<String> PIECES_GRAPHIC_COLUMN_IDS = new HashSet<>(Arrays.asList(
+		"pieces",
+		"blocks",
+		"completion",
+		"ProgressETA",
+		"fileavailability"
+	));
+
+	public static boolean
+	isPiecesTypeGraphicColumnName( String name )
+	{
+		if ( name == null ){
+			return false;
+		}
+		if ( PIECES_GRAPHIC_COLUMN_IDS.contains( name )){
+			return true;
+		}
+		String lower = name.toLowerCase( java.util.Locale.ROOT );
+		return lower.contains( "piece" ) || lower.contains( "progress" ) || lower.contains( "graph" );
+	}
+
+	/**
+	 * Size Pieces-type graphical columns to ~15% of app window width (clamped
+	 * to 10-20%, minimum 120 px, max 480 px, never narrower than min/header).
+	 */
+	public static int
+	computeGraphicalColumnWidth( int appWidth, int minWidth, int headerWidth )
+	{
+		int basis = appWidth > 0 ? appWidth : 1000;
+		int target = ( basis * 15 ) / 100;
+		int lo = Math.max( 120, ( basis * 10 ) / 100 );
+		int hi = Math.min( 480, Math.max( lo, ( basis * 20 ) / 100 ));
+		int clamped = Math.max( lo, Math.min( hi, target ));
+		return Math.max( clamped, Math.max( minWidth, headerWidth ));
+	}
 }

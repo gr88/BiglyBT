@@ -20,6 +20,8 @@ public final class DownloadControlBTRarestUpload
 {
 	public static final String REASON_ONLY_NON_RAREST = "only-non-rarest-requests";
 	public static final int DISCONNECT_AFTER_REJECTS = 8;
+	public static final String CFG_DISCONNECT_ENABLED = "dlcbt.upload.rarestonly.disconnect.enabled";
+	public static final String CFG_DISCONNECT_REJECTS = "dlcbt.upload.rarestonly.disconnect.rejects";
 
 	private DownloadControlBTRarestUpload(){}
 
@@ -31,6 +33,26 @@ public final class DownloadControlBTRarestUpload
 					DownloadControlBTDefaults.CFG_RAREST_ONLY, true );
 		}catch( Throwable t ){
 			return false;
+		}
+	}
+
+	public static boolean isDisconnectEnabled()
+	{
+		try{
+			return isEnabled()
+				&& COConfigurationManager.getBooleanParameter( CFG_DISCONNECT_ENABLED, true );
+		}catch( Throwable t ){
+			return false;
+		}
+	}
+
+	public static int disconnectAfterRejects()
+	{
+		try{
+			int n = COConfigurationManager.getIntParameter( CFG_DISCONNECT_REJECTS, DISCONNECT_AFTER_REJECTS );
+			return Math.max( 1, n );
+		}catch( Throwable t ){
+			return DISCONNECT_AFTER_REJECTS;
 		}
 	}
 

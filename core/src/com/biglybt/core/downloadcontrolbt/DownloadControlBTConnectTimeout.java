@@ -3,28 +3,40 @@
  */
 package com.biglybt.core.downloadcontrolbt;
 
+import com.biglybt.core.config.COConfigurationManager;
+
 /**
  * DLCBT Nov 18: kick (disconnect, never ban) outgoing peers that stay in
  * "Connecting" for about 30 s.
- *
- * Why upstream peers sit in Connecting longer than TCP's 15 s
- * CONNECT_ATTEMPT_TIMEOUT: that timer only covers the raw socket connect
- * once the request leaves the TCPConnectionManager queue. The peer stays
- * CONNECTION_CONNECTING until connectSuccess, i.e. also through the
- * MSE/PHE crypto negotiation (and a plain-text fallback reconnect when
- * crypto is refused), the uTP/UDP path (connect timeout 20 s, handled
- * outside TCP, "timeouts handled separately"), the TCP+uTP dual attempt,
- * hole-punch / SOCKS / I2P / Tor proxied connects. The only catch-all
- * upstream is a 2 minute safety net in PEPeerTransportProtocol
- * .doTimeoutChecks. DLCBT measures from the first connectStarted
- * (outbound_connection_start) and kicks at 30 s; checks run on the
- * peer-manager five-second cadence, so the kick lands at 30..35 s.
  */
 public final class DownloadControlBTConnectTimeout
 {
 	public static final long KICK_MS = 30 * 1000L;
+	public static final String CFG_ENABLED = "dlcbt.kick.connecting.enabled";
+	public static final String CFG_KICK_SECONDS = "dlcbt.kick.connecting.seconds";
+	public static final int DEFAULT_KICK_SECONDS = 30;
 
 	private DownloadControlBTConnectTimeout(){}
+
+	public static boolean isEnabled()
+	{
+		try{
+			return DownloadControlBT.isProfileEnabled()
+				&& COConfigurationManager.getBooleanParameter( CFG_ENABLED, true );
+		}catch( Throwable t ){
+			return false;
+		}
+	}
+
+	public static long kickMs()
+	{
+		try{
+			int sec = COConfigurationManager.getIntParameter( CFG_KICK_SECONDS, DEFAULT_KICK_SECONDS );
+			return Math.max( 1, sec ) * 1000L;
+		}catch( Throwable t ){
+			return KICK_MS;
+		}
+	}
 
 	public static boolean shouldKick(
 		boolean		profileEnabled,
@@ -33,9 +45,20 @@ public final class DownloadControlBTConnectTimeout
 		long		connectStartMono,
 		long		nowMono )
 	{
-		if ( !profileEnabled || incoming || !connecting || connectStartMono <= 0 ){
+		return shouldKick( profileEnabled, incoming, connecting, connectStartMono, nowMono, KICK_MS );
+	}
+
+	public static boolean shouldKick(
+		boolean		profileEnabled,
+		boolean		incoming,
+		boolean		connecting,
+		long		connectStartMono,
+		long		nowMono,
+		long		kickMs )
+	{
+		if ( !profileEnabled || incoming || !connecting || connectStartMono <= 0 || kickMs <= 0 ){
 			return false;
 		}
-		return nowMono - connectStartMono >= KICK_MS;
+		return nowMono - connectStartMono >= kickMs;
 	}
 }

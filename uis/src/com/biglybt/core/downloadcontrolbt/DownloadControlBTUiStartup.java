@@ -26,7 +26,11 @@ public final class DownloadControlBTUiStartup
 	public static void
 	afterSideBar( MultipleDocumentInterface mdi )
 	{
-		if ( !DownloadControlBT.isProfileEnabled() || !started.compareAndSet( false, true )){
+		if ( !DownloadControlBT.isProfileEnabled()){
+			return;
+		}
+		DownloadControlBTDefaults.registerStickyDirectoryListeners();
+		if ( !started.compareAndSet( false, true )){
 			return;
 		}
 		try{

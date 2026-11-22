@@ -146,6 +146,8 @@ public class SideBar
 	private boolean addEntriesToDash = false;
 
 	private boolean dlcbtFirstLayoutRedrawDone;
+	private boolean dlcbtRedrawScheduled;
+	private int dlcbtLastTreeWidth = -1;
 	
 	public SideBar() {
 		super(null, UISWTInstance.VIEW_MAIN, null);
@@ -824,12 +826,15 @@ public class SideBar
 				try {
 					switch (event.type) {
 						case SWT.MeasureItem: {
-							// Always request the full client width so the percent
-							// tag (drawn at the right edge) is inside the native
-							// PaintItem clip on GTK as well as Windows.
+							// Always request the full client width so child tags
+							// and right-edge pills stay inside the native PaintItem
+							// clip on GTK3 (skip 0 before first layout so GTK does
+							// not cache a zero width).
 							int clientWidth = tree.getClientArea().width;
-							event.x = 0;
-							event.width = Math.max(0, clientWidth);
+							if (clientWidth > 0) {
+								event.x = 0;
+								event.width = clientWidth;
+							}
 							event.height = 20;
 
 							break;
@@ -919,8 +924,17 @@ public class SideBar
 						}
 
 						case SWT.Resize: {
+							int cw = tree.getClientArea().width;
+							if (cw != dlcbtLastTreeWidth) {
+								dlcbtLastTreeWidth = cw;
+								dlcbtScheduleTreeRedraw();
+							}
 							tree.redraw();
 							dlcbtRedrawAfterFirstLayout();
+							break;
+						}
+						case SWT.Expand: {
+							dlcbtScheduleTreeRedraw();
 							break;
 						}
 
@@ -1280,6 +1294,7 @@ public class SideBar
 
 		// to disable collapsing
 		tree.addListener(SWT.Collapse, treeListener);
+		tree.addListener(SWT.Expand, treeListener);
 		
 		// for accelerators
 		
@@ -1833,6 +1848,23 @@ public class SideBar
 		t.redraw();
 	}
 
+	private void
+	dlcbtScheduleTreeRedraw()
+	{
+		if ( dlcbtRedrawScheduled ){
+			return;
+		}
+		dlcbtRedrawScheduled = true;
+		Utils.execSWTThreadLater( 60, () -> {
+			dlcbtRedrawScheduled = false;
+			Tree t = tree;
+			if ( t == null || t.isDisposed() || !t.isVisible()){
+				return;
+			}
+			t.redraw();
+		});
+	}
+
 	/**
 	 * @param event
 	 */
@@ -2154,6 +2186,9 @@ public class SideBar
 			treeItem.setData("MdiEntry", entry);
 			
 			entry.setTreeItem(treeItem);
+			if ( parentSwtItem != null ){
+				dlcbtScheduleTreeRedraw();
+			}
 			
 			/*
 			TreeItem[] items = parentSwtItem==null?tree.getItems():parentSwtItem.getItems();

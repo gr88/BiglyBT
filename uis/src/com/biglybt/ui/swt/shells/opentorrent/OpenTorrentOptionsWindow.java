@@ -1275,6 +1275,7 @@ public class OpenTorrentOptionsWindow
 					
 					doOpen.run();
 				}
+				dlcbtScheduleGtkCheckRefresh(dlg.getShell());
 				
 				dlg.addCloseListener(new SkinnedDialog.SkinnedDialogClosedListener() {
 					@Override
@@ -2425,6 +2426,54 @@ public class OpenTorrentOptionsWindow
 		String	key )
 	{
 		image_loader.releaseImage( key );
+	}
+
+	private void
+	dlcbtScheduleGtkCheckRefresh(
+		Shell		shell )
+	{
+		if ( shell == null || shell.isDisposed() || !Utils.isGTK3
+			|| !com.biglybt.core.downloadcontrolbt.DownloadControlBT.isProfileEnabled()){
+			return;
+		}
+		Runnable refresh = () -> {
+			if ( shell.isDisposed()){
+				return;
+			}
+			dlcbtRedrawCheckControls( shell );
+			for ( OpenTorrentInstance inst : open_instances ){
+				if ( inst.tvFiles != null && !inst.tvFiles.isDisposed()){
+					inst.tvFiles.refreshTable(false);
+					Composite tc = inst.tvFiles.getComposite();
+					if (tc != null && !tc.isDisposed()) {
+						tc.redraw();
+					}
+				}
+			}
+		};
+		shell.addListener( SWT.Activate, e -> Utils.execSWTThreadLater( 25, refresh ));
+		Utils.execSWTThreadLater( 150, refresh );
+	}
+
+	private static void
+	dlcbtRedrawCheckControls(
+		Composite	comp )
+	{
+		if ( comp == null || comp.isDisposed()){
+			return;
+		}
+		for ( Control child : comp.getChildren()){
+			if ( child == null || child.isDisposed()){
+				continue;
+			}
+			if ( child instanceof Button && ( child.getStyle() & SWT.CHECK ) != 0 ){
+				child.redraw();
+			}else if ( child instanceof Tree && ( child.getStyle() & SWT.CHECK ) != 0 ){
+				child.redraw();
+			}else if ( child instanceof Composite ){
+				dlcbtRedrawCheckControls((Composite)child );
+			}
+		}
 	}
 
 	protected void

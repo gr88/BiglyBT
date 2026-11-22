@@ -998,14 +998,15 @@ public class PEPeerControlImpl extends LogRelation implements PEPeerControl, Dis
                     if (peer instanceof com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol) {
                         com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol ptp =
                             (com.biglybt.core.peer.impl.transport.PEPeerTransportProtocol) peer;
+                        long dlcbtIdleMs = com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.idleMs();
                         if (com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.shouldBan(
-                                true,
+                                com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.isEnabled(),
                                 peer.getConnectionState(),
                                 peer.getConnectionEstablishedMonoTime(),
                                 ptp.dlcbtLastDataActivityMono(),
                                 nowMono,
-                                ptp.dlcbtHasRecentRarestReject(nowMono,
-                                    com.biglybt.core.downloadcontrolbt.DownloadControlBTIdleBan.IDLE_MS))) {
+                                ptp.dlcbtHasRecentRarestReject(nowMono, dlcbtIdleMs),
+                                dlcbtIdleMs)) {
                             DownloadControlBTBanService.get().onIdlePeer(peer.getIp(),
                                 "idleMs=" + (nowMono - Math.max(ptp.dlcbtLastDataActivityMono(),
                                     peer.getConnectionEstablishedMonoTime())));

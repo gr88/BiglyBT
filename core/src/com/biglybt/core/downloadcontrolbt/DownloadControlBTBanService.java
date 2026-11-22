@@ -37,13 +37,23 @@ public final class DownloadControlBTBanService
 	public static final String CFG_WINDOW_SECONDS = "dlcbt.ban.window.seconds";
 	public static final String CFG_DUP_WINDOW_SECONDS = "dlcbt.ban.duplicate.window.seconds";
 	public static final String CFG_DUP_THRESHOLD = "dlcbt.ban.duplicate.threshold";
+	public static final String CFG_SPEED_ENABLED = "dlcbt.ban.speed.enabled";
+	public static final String CFG_HANDSHAKE_ENABLED = "dlcbt.ban.handshake.enabled";
+	public static final String CFG_HANDSHAKE_SECONDS = "dlcbt.ban.handshake.seconds";
+	public static final String CFG_DUP_ENABLED = "dlcbt.ban.duplicate.enabled";
+	public static final String CFG_HASH_FAIL_ENABLED = "dlcbt.ban.hashfail.enabled";
+	public static final String CFG_HASH_FAIL_MIN_SECONDS = "dlcbt.ban.hashfail.min.seconds";
+	public static final String CFG_HASH_FAIL_MAX_SECONDS = "dlcbt.ban.hashfail.max.seconds";
 
 	public static final int DEFAULT_MIN_MINUTES = 54;
 	public static final int DEFAULT_MAX_MINUTES = 64;
 	public static final int DEFAULT_RAMP_SECONDS = 60;
 	public static final int DEFAULT_WINDOW_SECONDS = 30;
+	public static final int DEFAULT_HANDSHAKE_SECONDS = 3;
 	public static final int DEFAULT_DUP_WINDOW_SECONDS = 60;
 	public static final int DEFAULT_DUP_THRESHOLD = 3;
+	public static final int DEFAULT_HASH_FAIL_MIN_SECONDS = 210;
+	public static final int DEFAULT_HASH_FAIL_MAX_SECONDS = 270;
 
 	private static final DownloadControlBTBanService	instance = new DownloadControlBTBanService();
 
@@ -57,6 +67,8 @@ public final class DownloadControlBTBanService
 
 	private final DownloadControlBTBanRegistry			registry = new DownloadControlBTBanRegistry();
 	private DownloadControlBTDuplicateTracker			duplicates;
+	private int											lastDupThreshold = -1;
+	private long										lastDupWindowMs = -1;
 	private final Random	random = new Random();
 	private final List<BanListener>	listeners = new CopyOnWriteArrayList<>();
 
@@ -109,6 +121,31 @@ public final class DownloadControlBTBanService
 		return registry;
 	}
 
+	public boolean isSpeedBanEnabled()
+	{
+		return isPolicyEnabled() && boolParam( CFG_SPEED_ENABLED, true );
+	}
+
+	public boolean isHandshakeBanEnabled()
+	{
+		return isPolicyEnabled() && boolParam( CFG_HANDSHAKE_ENABLED, true );
+	}
+
+	public boolean isDuplicateBanEnabled()
+	{
+		return isPolicyEnabled() && boolParam( CFG_DUP_ENABLED, true );
+	}
+
+	public boolean isHashFailBanEnabled()
+	{
+		return isPolicyEnabled() && boolParam( CFG_HASH_FAIL_ENABLED, true );
+	}
+
+	public boolean isIdleBanEnabled()
+	{
+		return isPolicyEnabled() && boolParam( DownloadControlBTIdleBan.CFG_ENABLED, true );
+	}
+
 	public DownloadControlBTBanRegistry.Ban
 	onRejectedIncomingDuplicate(
 		String		torrentId,
@@ -116,16 +153,18 @@ public final class DownloadControlBTBanService
 		boolean		incoming,
 		boolean		hadLiveSameAddressOnTorrent )
 	{
-		if ( !isPolicyEnabled()){
+		if ( !isDuplicateBanEnabled()){
 			return null;
 		}
 		long now = System.currentTimeMillis();
 		DownloadControlBTBanRegistry.Ban ban;
 		synchronized( this ){
-			if ( duplicates == null ){
-				duplicates = new DownloadControlBTDuplicateTracker(
-					Math.max( 1, intParam( CFG_DUP_THRESHOLD, DEFAULT_DUP_THRESHOLD )),
-					Math.max( 1, intParam( CFG_DUP_WINDOW_SECONDS, DEFAULT_DUP_WINDOW_SECONDS )) * 1000L );
+			int thresh = Math.max( 1, intParam( CFG_DUP_THRESHOLD, DEFAULT_DUP_THRESHOLD ));
+			long winMs = Math.max( 1, intParam( CFG_DUP_WINDOW_SECONDS, DEFAULT_DUP_WINDOW_SECONDS )) * 1000L;
+			if ( duplicates == null || thresh != lastDupThreshold || winMs != lastDupWindowMs ){
+				duplicates = new DownloadControlBTDuplicateTracker( thresh, winMs );
+				lastDupThreshold = thresh;
+				lastDupWindowMs = winMs;
 			}
 			DownloadControlBTDuplicateTracker.Decision decision = duplicates.onRejectedIncomingDuplicate(
 				torrentId, address, now, incoming, hadLiveSameAddressOnTorrent );
@@ -155,7 +194,7 @@ public final class DownloadControlBTBanService
 		boolean							activelySendingEligible,
 		String							detail )
 	{
-		if ( sampler == null || !isPolicyEnabled()){
+		if ( sampler == null || !isSpeedBanEnabled()){
 			return null;
 		}
 		long now = System.currentTimeMillis();
@@ -186,9 +225,9 @@ public final class DownloadControlBTBanService
 
 	/** Called only for the same connection state displayed as Waiting for Handshake. */
 	public DownloadControlBTBanRegistry.Ban onHandshakeTimeout(String address, int state, long establishedMono, long nowMono) {
-		if (!isPolicyEnabled() || !handshakeOverdue(state, establishedMono, nowMono)) return null;
+		if (!isHandshakeBanEnabled() || !handshakeOverdue(state, establishedMono, nowMono, handshakeMs())) return null;
 		DownloadControlBTBanRegistry.Ban ban;
-		synchronized (this) {
+		synchronized(this) {
 			if (registry.isBanned(address, System.currentTimeMillis())) return null;
 			ban = applyBanLocked(address, System.currentTimeMillis(), "handshake-timeout", "waitingForHandshakeMs=" + (nowMono-establishedMono));
 		}
@@ -204,12 +243,15 @@ public final class DownloadControlBTBanService
 	 * An address already banned keeps its existing (possibly longer) ban.
 	 */
 	public DownloadControlBTBanRegistry.Ban onHashFail(String address, String detail) {
-		if (!isPolicyEnabled() || address == null || address.isEmpty()) return null;
+		if (!isHashFailBanEnabled() || address == null || address.isEmpty()) return null;
 		DownloadControlBTBanRegistry.Ban ban;
-		synchronized (this) {
+		synchronized(this) {
 			long now = System.currentTimeMillis();
 			if (registry.isBanned(address, now)) return null;
-			ban = registry.ban(address, now, hashFailDurationMs(random), REASON_HASH_FAIL, detail);
+			long minMs = hashFailMinSeconds() * 1000L;
+			long maxMs = Math.max(minMs, hashFailMaxSeconds() * 1000L);
+			long dur = DownloadControlBTBanRegistry.randomDurationRangeMs(minMs, maxMs, random);
+			ban = registry.ban(address, now, dur, REASON_HASH_FAIL, detail);
 			if (ban != null) logBan(ban);
 		}
 		fire(ban);
@@ -222,9 +264,9 @@ public final class DownloadControlBTBanService
 
 	/** Fully-established peer idle in both directions for ~5 s. */
 	public DownloadControlBTBanRegistry.Ban onIdlePeer(String address, String detail) {
-		if (!isPolicyEnabled() || address == null || address.isEmpty()) return null;
+		if (!isIdleBanEnabled() || address == null || address.isEmpty()) return null;
 		DownloadControlBTBanRegistry.Ban ban;
-		synchronized (this) {
+		synchronized(this) {
 			long now = System.currentTimeMillis();
 			if (registry.isBanned(address, now)) return null;
 			ban = applyBanLocked(address, now, REASON_IDLE, detail);
@@ -234,8 +276,40 @@ public final class DownloadControlBTBanService
 	}
 
 	public static boolean handshakeOverdue(int state, long establishedMono, long nowMono) {
+		return handshakeOverdue(state, establishedMono, nowMono, 3000L);
+	}
+
+	public static boolean handshakeOverdue(int state, long establishedMono, long nowMono, long thresholdMs) {
 		return state == com.biglybt.core.peer.impl.PEPeerTransport.CONNECTION_WAITING_FOR_HANDSHAKE
-			&& nowMono - establishedMono > 3000;
+			&& nowMono - establishedMono > thresholdMs;
+	}
+
+	public String formatActiveBansSummary(long nowMs) {
+		List<DownloadControlBTBanRegistry.Ban> active;
+		synchronized (this) {
+			active = registry.snapshot(nowMs);
+		}
+		if (active.isEmpty()) {
+			return "Active DLCBT temporary bans: 0";
+		}
+		StringBuilder sb = new StringBuilder();
+		sb.append("Active DLCBT temporary bans: ").append(active.size());
+		int limit = Math.min(active.size(), 50);
+		for (int i = 0; i < limit; i++) {
+			DownloadControlBTBanRegistry.Ban b = active.get(i);
+			long remSec = Math.max(0L, (b.expiryMs - nowMs) / 1000L);
+			sb.append('\n')
+			  .append(b.canonical)
+			  .append("  [").append(b.reason).append("]  ")
+			  .append(remSec / 60).append('m').append(String.format("%02ds", remSec % 60));
+			if (b.detail != null && !b.detail.isEmpty()) {
+				sb.append("  ").append(b.detail);
+			}
+		}
+		if (active.size() > limit) {
+			sb.append("\n... and ").append(active.size() - limit).append(" more");
+		}
+		return sb.toString();
 	}
 
 	public synchronized int
@@ -372,6 +446,36 @@ public final class DownloadControlBTBanService
 		}catch( Throwable t ){
 		}
 		return DownloadControlBTRateFormat.parseRate( DownloadControlBTRateFormat.DEFAULT_MAX );
+	}
+
+	private long
+	handshakeMs()
+	{
+		return Math.max( 1, intParam( CFG_HANDSHAKE_SECONDS, DEFAULT_HANDSHAKE_SECONDS )) * 1000L;
+	}
+
+	private int
+	hashFailMinSeconds()
+	{
+		return Math.max( 1, intParam( CFG_HASH_FAIL_MIN_SECONDS, DEFAULT_HASH_FAIL_MIN_SECONDS ));
+	}
+
+	private int
+	hashFailMaxSeconds()
+	{
+		return Math.max( hashFailMinSeconds(), intParam( CFG_HASH_FAIL_MAX_SECONDS, DEFAULT_HASH_FAIL_MAX_SECONDS ));
+	}
+
+	private static boolean
+	boolParam(
+		String		key,
+		boolean		fallback )
+	{
+		try{
+			return COConfigurationManager.getBooleanParameter( key, fallback );
+		}catch( Throwable t ){
+			return fallback;
+		}
 	}
 
 	private static int
