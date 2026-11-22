@@ -36,6 +36,51 @@ Legacy downloads that already had the experiment enabled (old
 `dlcbt.enabled=true` without a stored mode) keep Sequential behaviour.
 No config reset is required.
 
+## 2026-11-21 — Peer-blocking rules tab, sticky directories, sidebar tags, GTK checkmarks, graphic column auto-fit
+
+- **Options > DownLoadControlBT > Peer Blocking Rules** (`ConfigSectionDownloadControlBTRules`):
+  a dedicated Options subsection (not a main-window view) so rule thresholds
+  live with the other DLCBT settings and get BiglyBT's normal Save/Reset,
+  enable/disable, and Console parity. It lists every current DLCBT rule in
+  plain words and lets each rule be turned on or off and have its
+  thresholds and durations adjusted. Defaults keep prior behaviour:
+  speed 10k–251.1k after a 60 s ramp-up with a 30 s average and a 54–64
+  minute ban; handshake wait over 3 s; 3 duplicate incomings in 60 s;
+  hash-fail 210–270 s; Connecting 30–35 s kick; idle-peer ban; rarest-only
+  disconnect after 8 rejects. Upstream BiglyBT rules that were kept
+  (3-strike bad-data/IP filter, discard-ratio disconnect, 2-minute
+  connect/keepalive safety checks) are summarised read-only. A live
+  Active Bans box lists current in-memory bans (IP, reason, remaining
+  time) with Refresh and Unban All.
+- **Sticky download and torrent-save folders**: `InitIsolatedConfig` now
+  uses `setIfUnset` for `Default save path`, `Save Torrent Files`, and
+  `General_sDefaultTorrent_Directory`, so a later Options change is not
+  overwritten on restart. Changing those Options values also clears the
+  stale `previous.filter.dir.data` / `previous.filter.dir.torrent`
+  remembered paths, and Open Torrent Options reads the live
+  `Default save path` instead of falling back to factory defaults.
+- **Sidebar My Torrents child tags** (`Download State`, `All Peers`,
+  `Up Peers`, and other indicators): GTK3 redraw now actually paints the
+  tree row (SWT 4.968 `TreeItem.clear()` is a no-op on non-VIRTUAL trees),
+  MeasureItem no longer writes a zero width before layout, and expand /
+  resize / child-row creation schedule a debounced tree redraw. This
+  extends the earlier percent-tag fix (2026-11-20) to all sidebar entry
+  text and indicators.
+- **Open Torrent Options checkboxes on HDMI** (SWT 4.968 / GTK scale):
+  table check icons are reloaded if disposed; non-fillCell image paints
+  temporarily disable GC advanced mode; the dialog refreshes native
+  GTK check buttons and the files table shortly after open and on
+  Activate, so missing checkmarks after a dpi/scale change are less
+  likely. Orange Yaru theme borders on checked boxes can still appear
+  (theme colour, not a DLCBT custom border).
+- **Automatic Size Column to Fit**: Pieces-type graphical columns
+  (`pieces`, `blocks`, `completion`, `ProgressETA`, `fileavailability`,
+  and other piece/progress/graph columns) are sized to about 15% of the
+  main app window width (clamped to 10–20%, 120–480 px, and never below
+  the header or minimum width) instead of shrinking to content.
+- **File > Restart** still detaches the new instance from the launching
+  terminal; that remains accepted behaviour and was not changed.
+
 ## 2026-11-20 — Defaults, sticky listen ports, restart lock, idle-peer ban, rarest-only upload, NAT test, table autofit, sidebar percent
 
 - **Isolated defaults** (setIfUnset / one-shot flags only, so later user
